@@ -333,6 +333,9 @@ tbody td strong{color:var(--text);font-weight:600}
         <button class="nav-item" id="nav_satser" onclick="navTo('satser')">
           <i class="ti ti-coin"></i>Satser
         </button>
+        <button class="nav-item" id="nav_import" onclick="navTo('import')">
+          <i class="ti ti-file-upload"></i>Importer
+        </button>
         <div style="margin:.5rem 1rem;border-top:1px solid var(--border)"></div>
         <button class="nav-item" onclick="showPublicForm()">
           <i class="ti ti-external-link"></i>Dommerskjema
@@ -421,6 +424,49 @@ tbody td strong{color:var(--text);font-weight:600}
         </div>
       </div>
 
+      <!-- IMPORT -->
+      <div id="page_import" class="page">
+        <div class="page-title">Importer fra Excel</div>
+        <div class="card" style="margin-bottom:.75rem">
+          <div style="font-size:14px;font-weight:600;margin-bottom:.5rem">Last opp Excel-fil</div>
+          <div style="font-size:13px;color:var(--text3);margin-bottom:1rem">
+            Støtter samme format som det gamle Google Forms-eksportarket. Importerer fra rad 1140.
+          </div>
+          <input type="file" id="importFile" accept=".xlsx" onchange="handleImportFile(event)"
+            style="font-size:13px;padding:8px;border:1px dashed var(--border);border-radius:9px;width:100%;cursor:pointer;background:var(--bg)"/>
+        </div>
+        <div id="importPreview" style="display:none">
+          <div class="card" style="margin-bottom:.75rem">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:.875rem">
+              <div>
+                <div style="font-size:14px;font-weight:600" id="importCount"></div>
+                <div style="font-size:12px;color:var(--text3)">Sjekk radene under før du importerer</div>
+              </div>
+              <button class="btn btn-primary" onclick="doImport()"><i class="ti ti-database-import"></i>Importer alle</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Dommer</th>
+                    <th>Kampdato</th>
+                    <th>Idrett</th>
+                    <th>Årsklasse</th>
+                    <th>Hjemme – Borte</th>
+                    <th>Honorar</th>
+                    <th>Kontonr</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="importTbl"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div id="importResult" style="display:none"></div>
+      </div>
+
       <!-- SATSER -->
       <div id="page_satser" class="page">
         <div class="page-title">Dommerhonorar – satser</div>
@@ -445,6 +491,9 @@ tbody td strong{color:var(--text);font-weight:600}
       </button>
       <button class="mobile-nav-btn" id="mnav_satser" onclick="navTo('satser')">
         <i class="ti ti-coin"></i><span>Satser</span>
+      </button>
+      <button class="mobile-nav-btn" id="mnav_import" onclick="navTo('import')">
+        <i class="ti ti-file-upload"></i><span>Importer</span>
       </button>
       <button class="mobile-nav-btn" onclick="showPublicForm()">
         <i class="ti ti-external-link"></i><span>Skjema</span>
@@ -733,7 +782,7 @@ async function showAdminApp() {
 }
 
 function navTo(page) {
-  ['oversikt','eksport','satser'].forEach(p => {
+  ['oversikt','eksport','satser','import'].forEach(p => {
     document.getElementById('page_'+p).classList.toggle('active', p===page);
     const si = document.getElementById('nav_'+p);
     const mi = document.getElementById('mnav_'+p);
@@ -966,6 +1015,139 @@ async function lagreSatser() {
   const { error } = await sb.from('dommerhonorar_satser').upsert(rows, {onConflict:'idrett,aarstall'});
   if (error) { showToast('Feil ved lagring'); console.error(error); return; }
   showToast('Satser lagret');
+}
+
+
+// ── IMPORT ───────────────────────────────────────────────────────────────────
+let importRows = [];
+
+function handleImportFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const data = new Uint8Array(e.target.result);
+    const wb = XLSX.read(data, {type:'array', cellDates:true});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const allRows = XLSX.utils.sheet_to_json(ws, {header:1, defval:'', raw:false, dateNF:'yyyy-mm-dd'});
+
+    // From row 1140 (index 1139)
+    importRows = [];
+    for (let i = 1139; i < allRows.length; i++) {
+      const r = allRows[i];
+      if (!r || r.length < 11) continue;
+
+      const opprettet = r[0] || '';   // A - Tidsmerke
+      const epost     = (r[1]||'').trim();   // B - E-post dommer
+      const idrett    = (r[2]||'').trim();   // C - Idrett
+      const kampdato  = parseExcelDato(r[3]); // D - Kampdato
+      const aarstall  = (r[4]||'').trim();   // E - Lag/klasse
+      const hjemme    = (r[5]||'').trim();   // F - Hjemmelag
+      const borte     = (r[6]||'').trim();   // G - Bortelag
+      const navn      = (r[10]||'').trim();  // K - Navn dommer
+      const tlf       = String(r[11]||'').replace(/\D/g,'').slice(0,8); // L - Tlf dommer
+      const kontonr   = String(r[12]||'').replace(/[^\d]/g,'').slice(0,11); // M - Kontonr
+      const honorarTxt= (r[13]||'').trim();  // N - Honorar tekst
+
+      // Extract number from honorar text e.g. "200 kr (7er kamp fotball)"
+      const honorarMatch = honorarTxt.match(/(\d+)/);
+      const honorar = honorarMatch ? parseInt(honorarMatch[1]) : 0;
+
+      if (!navn || !kampdato || !hjemme || !borte) continue;
+
+      importRows.push({
+        opprettet, epost, idrett, kampdato, aarstall,
+        hjemme, borte, navn, tlf, kontonr, honorar, honorarTxt,
+        status: 'ny'
+      });
+    }
+    renderImportPreview();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseExcelDato(val) {
+  if (!val) return '';
+  // Already a date string like 2026-05-07
+  if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}/.test(val)) return val.slice(0,10);
+  // Try parsing
+  const d = new Date(val);
+  if (!isNaN(d)) return d.toISOString().slice(0,10);
+  return String(val).slice(0,10);
+}
+
+function renderImportPreview() {
+  const preview = document.getElementById('importPreview');
+  const tbl = document.getElementById('importTbl');
+  const countEl = document.getElementById('importCount');
+
+  if (!importRows.length) {
+    preview.style.display = 'none';
+    showToast('Ingen rader funnet fra rad 1140');
+    return;
+  }
+
+  countEl.textContent = importRows.length + ' rader funnet';
+  preview.style.display = 'block';
+
+  tbl.innerHTML = importRows.map((r, i) => `
+    <tr>
+      <td style="color:var(--text4)">${i+1}</td>
+      <td><strong>${esc(r.navn)}</strong><br><span style="font-size:11px;color:var(--text4)">${esc(r.epost)}</span></td>
+      <td>${fmtDato(r.kampdato)}</td>
+      <td>${esc(r.idrett)}</td>
+      <td>${esc(r.aarstall)}</td>
+      <td style="font-size:12px">${esc(r.hjemme)} – ${esc(r.borte)}</td>
+      <td style="font-weight:600;color:var(--blue)">${r.honorar} kr</td>
+      <td style="font-size:11px">${esc(r.kontonr)||'<span style="color:var(--red)">Mangler</span>'}</td>
+      <td><span class="badge badge-new">Ny</span></td>
+    </tr>`).join('');
+}
+
+async function doImport() {
+  if (!importRows.length) return;
+  const btn = document.querySelector('#page_import .btn-primary');
+  btn.disabled = true; btn.textContent = 'Importerer…';
+
+  const inserts = importRows.map(r => ({
+    dommer_navn:   r.navn,
+    dommer_epost:  r.epost,
+    dommer_tlf:    r.tlf,
+    kontonr:       r.kontonr,
+    kampdato:      r.kampdato,
+    hjemmelag:     r.hjemme,
+    bortelag:      r.borte,
+    idrett:        r.idrett,
+    aarstall:      r.aarstall,
+    honorar:       r.honorar,
+    status:        'ny',
+    opprettet:     r.opprettet || new Date().toISOString(),
+  }));
+
+  // Insert in batches of 50
+  let ok = 0, feil = 0;
+  for (let i = 0; i < inserts.length; i += 50) {
+    const batch = inserts.slice(i, i+50);
+    const { error } = await sb.from('dommerregninger').insert(batch);
+    if (error) { feil += batch.length; console.error(error); }
+    else ok += batch.length;
+  }
+
+  btn.disabled = false; btn.textContent = 'Importer alle';
+
+  const res = document.getElementById('importResult');
+  res.style.display = 'block';
+  res.innerHTML = `<div class="card" style="border-color:${feil?'var(--red-border)':'var(--green-border)'};background:${feil?'var(--red-light)':'var(--green-light)'}">
+    <div style="font-size:14px;font-weight:600;color:${feil?'var(--red)':'var(--green)'}">
+      ${ok} rader importert${feil ? ', '+feil+' feilet' : ' – alt OK!'}
+    </div>
+  </div>`;
+
+  if (ok > 0) {
+    document.getElementById('importPreview').style.display = 'none';
+    importRows = [];
+    await loadOversikt();
+  }
 }
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
