@@ -374,10 +374,17 @@ tbody td strong{color:var(--text);font-weight:600}
           </select>
           <input type="month" id="fil_mnd" class="filter-select" style="min-width:0;width:140px" onchange="loadOversikt()" title="Filtrer på måned"/>
         </div>
+        <div id="bulkBar" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:.75rem;padding:10px 12px;background:var(--blue-light);border:1px solid var(--blue-border);border-radius:10px">
+          <span id="bulkCount" style="font-size:13px;font-weight:600;color:var(--blue);flex:1"></span>
+          <button class="btn btn-green btn-sm" onclick="bulkOppdater('godkjent')"><i class="ti ti-check"></i>Godkjenn valgte</button>
+          <button class="btn btn-sm" style="background:var(--red-light);color:var(--red);border:1px solid var(--red-border)" onclick="bulkOppdater('avvist')"><i class="ti ti-x"></i>Avvis valgte</button>
+          <button class="btn btn-outline btn-sm" onclick="velgAlle(false)"><i class="ti ti-square"></i>Fjern valg</button>
+        </div>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
+                <th style="width:32px"><input type="checkbox" id="cb_alle" onchange="velgAlle(this.checked)" title="Velg alle nye" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer"/></th>
                 <th></th>
                 <th>Dommer</th>
                 <th>Dato</th>
@@ -866,13 +873,18 @@ function renderOversikt() {
   const tbody = document.getElementById('tbl_regninger');
   const empty = document.getElementById('oversikt_empty');
   if (!allRegninger.length) {
-    tbody.innerHTML = ''; empty.style.display = 'block'; return;
+    tbody.innerHTML = ''; empty.style.display = 'block';
+    document.getElementById('bulkBar').style.display = 'none'; return;
   }
   empty.style.display = 'none';
   tbody.innerHTML = allRegninger.map(r => {
     const dup = isDuplikat(r, allRegninger);
-  return `
+    const kanVelges = r.status === 'ny';
+    return `
     <tr style="${dup ? 'background:var(--yellow-light)' : ''}">
+      <td style="width:32px">
+        ${kanVelges ? `<input type="checkbox" class="rad-cb" value="${r.id}" onchange="oppdaterBulkBar()" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer"/>` : ''}
+      </td>
       <td>
         <span class="dot ${r.status==='ny'?'dot-blue':r.status==='godkjent'?'dot-green':r.status==='eksportert'?'dot-gray':'dot-red'}"></span>
         ${dup ? '<span title="Mulig duplikat" style="font-size:14px;cursor:default">⚠️</span>' : ''}
@@ -895,10 +907,55 @@ function renderOversikt() {
              </div>`
           : r.status==='godkjent'
           ? `<span class="badge badge-paid">Godkjent</span>`
+          : r.status==='eksportert'
+          ? `<span class="badge" style="background:var(--bg);color:var(--text4);border:1px solid var(--border)">Eksportert</span>`
           : `<span class="badge" style="background:var(--red-light);color:var(--red)">Avvist</span>`}
       </td>
     </tr>`;}).join('');
+  oppdaterBulkBar();
 }
+
+function oppdaterBulkBar() {
+  const valgte = [...document.querySelectorAll('.rad-cb:checked')];
+  const alle   = [...document.querySelectorAll('.rad-cb')];
+  const bar    = document.getElementById('bulkBar');
+  const cbAlle = document.getElementById('cb_alle');
+  bar.style.display = valgte.length > 0 ? 'flex' : 'none';
+  document.getElementById('bulkCount').textContent = valgte.length + ' valgt';
+  if (cbAlle) cbAlle.checked = alle.length > 0 && valgte.length === alle.length;
+}
+
+function velgAlle(checked) {
+  document.querySelectorAll('.rad-cb').forEach(cb => cb.checked = checked);
+  oppdaterBulkBar();
+}
+
+async function bulkOppdater(nyStatus) {
+  const ids = [...document.querySelectorAll('.rad-cb:checked')].map(cb => cb.value);
+  if (!ids.length) return;
+  const label = nyStatus === 'godkjent' ? 'Godkjenn' : 'Avvis';
+  const cls   = nyStatus === 'godkjent' ? 'btn-green' : 'btn-primary';
+  openModal(
+    `${label} ${ids.length} regning(er)`,
+    nyStatus === 'godkjent'
+      ? `${ids.length} regninger godkjennes og går til eksport.`
+      : `${ids.length} regninger avvises.`,
+    [
+      {label:'Avbryt', cls:'btn-outline', fn:'closeModal()'},
+      {label:label+' alle', cls, fn:`_doBulkOppdater(${JSON.stringify(ids)},'${nyStatus}')`},
+    ]
+  );
+}
+
+window._doBulkOppdater = async function(ids, nyStatus) {
+  closeModal();
+  const { error } = await sb.from('dommerregninger').update({status: nyStatus}).in('id', ids);
+  if (error) { showToast('Feil – prøv igjen'); return; }
+  showToast(nyStatus === 'godkjent'
+    ? ids.length + ' regninger godkjent'
+    : ids.length + ' regninger avvist');
+  await loadOversikt();
+};
 
 async function oppdaterStatus(id, nyStatus) {
   const label = nyStatus === 'godkjent' ? 'Godkjenn' : 'Avvis';
