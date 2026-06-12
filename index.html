@@ -867,7 +867,7 @@ function downloadExcel(alle) {
     'Bortelag':     r.bortelag,
     'Årsklasse':    r.aarstall,
     'Status':       r.status,
-    'Sendt inn':    r.opprettet ? r.opprettet.slice(0,10) : '',
+    'Sendt inn':    r.opprettet ? r.opprettet.slice(0,10) + ' ' + r.opprettet.slice(11,16) : '',
   })));
   XLSX.utils.book_append_sheet(wb, ws, 'Dommerregninger');
   XLSX.writeFile(wb, `dommerregninger_${new Date().toISOString().slice(0,10)}.xlsx`);
