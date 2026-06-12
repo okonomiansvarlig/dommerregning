@@ -364,6 +364,7 @@ tbody td strong{color:var(--text);font-weight:600}
             <option value="ny">Nye</option>
             <option value="godkjent">Godkjent</option>
             <option value="avvist">Avvist</option>
+            <option value="eksportert">Eksportert</option>
           </select>
           <select class="filter-select" id="fil_aar" onchange="loadOversikt()">
             <option value="">Alle årsklasser</option>
@@ -401,7 +402,7 @@ tbody td strong{color:var(--text);font-weight:600}
             <div>
               <div style="font-size:14px;font-weight:600;margin-bottom:3px">Last ned Excel</div>
               <div style="font-size:13px;color:var(--text3)">
-                <span class="dot dot-blue"></span>Blå prikk = ny, ikke eksportert &nbsp;
+                <span class="dot dot-green"></span>Grønn = klar for eksport &nbsp;
                 <span class="dot dot-gray"></span>Grå = tidligere eksportert
               </div>
             </div>
@@ -856,15 +857,17 @@ async function loadEksport() {
 
 function renderEksportListe() {
   const el = document.getElementById('eksportListe');
-  if (!eksportData.length) { el.innerHTML = '<div class="empty"><i class="ti ti-inbox"></i><p>Ingen regninger</p></div>'; return; }
-  el.innerHTML = eksportData.map(r => `
+  const visData = eksportData.filter(r => r.status === 'godkjent' || r.status === 'eksportert');
+  if (!visData.length) { el.innerHTML = '<div class="empty"><i class="ti ti-inbox"></i><p>Ingen godkjente regninger</p></div>'; return; }
+  el.innerHTML = visData.map(r => `
     <div class="cb-row">
-      <input type="checkbox" id="ek_${r.id}" value="${r.id}" ${r.status==='godkjent'?'checked':''}>
+      <input type="checkbox" id="ek_${r.id}" value="${r.id}" ${r.status==='godkjent'?'checked':'disabled'}>
       <label for="ek_${r.id}">
-        <span class="dot ${r.status==='ny'?'dot-blue':'dot-gray'}"></span>
+        <span class="dot ${r.status==='godkjent'?'dot-green':'dot-gray'}"></span>
         <strong>${esc(r.dommer_navn)}</strong> – ${fmtDato(r.kampdato)} –
         ${esc(r.hjemmelag)} vs ${esc(r.bortelag)} (${esc(r.aarstall)}) –
         <span style="color:var(--blue);font-weight:600">${kr(r.honorar)}</span>
+        ${r.status==='eksportert' ? `<span style="font-size:11px;color:var(--text4);margin-left:6px">Eksportert ${fmtTs(r.eksportert_dato)}</span>` : ''}
       </label>
     </div>`).join('');
 }
