@@ -126,6 +126,8 @@ tbody td strong{color:var(--text);font-weight:600}
 .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;flex-shrink:0}
 .dot-blue{background:var(--blue)}
 .dot-gray{background:var(--text4)}
+.dot-green{background:var(--green)}
+.dot-red{background:var(--red)}
 
 /* Action btns */
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:opacity .15s}
@@ -360,7 +362,8 @@ tbody td strong{color:var(--text);font-weight:600}
           <select class="filter-select" id="fil_status" onchange="loadOversikt()">
             <option value="">Alle</option>
             <option value="ny">Nye</option>
-            <option value="utbetalt">Utbetalt</option>
+            <option value="godkjent">Godkjent</option>
+            <option value="avvist">Avvist</option>
           </select>
           <select class="filter-select" id="fil_aar" onchange="loadOversikt()">
             <option value="">Alle årsklasser</option>
@@ -410,8 +413,8 @@ tbody td strong{color:var(--text);font-weight:600}
         </div>
         <div class="card">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.875rem;flex-wrap:wrap;gap:8px">
-            <div style="font-size:14px;font-weight:600">Marker som utbetalt</div>
-            <button class="btn btn-green btn-sm" onclick="markerUtbetalt()"><i class="ti ti-check"></i>Marker valgte</button>
+            <div style="font-size:14px;font-weight:600">Marker som eksportert</div>
+            <button class="btn btn-green btn-sm" onclick="markerEksportert()"><i class="ti ti-check"></i>Marker valgte</button>
           </div>
           <div id="eksportListe"></div>
         </div>
@@ -765,8 +768,10 @@ function nextMonth(mnd) {
 
 function renderStats() {
   const nye     = allRegninger.filter(r => r.status === 'ny').length;
-  const utbetalt= allRegninger.filter(r => r.status === 'utbetalt').length;
+  const godkjent = allRegninger.filter(r => r.status === 'godkjent').length;
+  const avvist   = allRegninger.filter(r => r.status === 'avvist').length;
   const sumNy   = allRegninger.filter(r => r.status === 'ny').reduce((a,r)=>a+Number(r.honorar||0),0);
+  const sumGodkjent = allRegninger.filter(r => r.status === 'godkjent').reduce((a,r)=>a+Number(r.honorar||0),0);
   const sumAll  = allRegninger.reduce((a,r)=>a+Number(r.honorar||0),0);
   document.getElementById('statsRow').innerHTML = `
     <div class="stat-card">
@@ -775,8 +780,13 @@ function renderStats() {
       <div class="stat-sub">${kr(sumNy)} utestående</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Utbetalt</div>
-      <div class="stat-val">${utbetalt}</div>
+      <div class="stat-label">Godkjent</div>
+      <div class="stat-val">${godkjent}</div>
+      <div class="stat-sub">${kr(sumGodkjent)} klar for eksport</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Avvist</div>
+      <div class="stat-val">${avvist}</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">Totalt (filter)</div>
@@ -807,23 +817,31 @@ function renderOversikt() {
       <td style="font-size:11px;color:var(--text4)">${fmtTs(r.opprettet)}</td>
       <td>
         ${r.status==='ny'
-          ? `<button class="btn btn-green btn-sm" onclick="markerEnUtbetalt('${r.id}')">Utbetal</button>`
-          : `<span class="badge badge-paid">Utbetalt</span>`}
+          ? `<div style="display:flex;gap:5px">
+              <button class="btn btn-green btn-sm" onclick="oppdaterStatus('${r.id}','godkjent')">Godkjenn</button>
+              <button class="btn btn-sm" style="background:var(--red-light);color:var(--red);border:1px solid var(--red-border)" onclick="oppdaterStatus('${r.id}','avvist')">Avvis</button>
+             </div>`
+          : r.status==='godkjent'
+          ? `<span class="badge badge-paid">Godkjent</span>`
+          : `<span class="badge" style="background:var(--red-light);color:var(--red)">Avvist</span>`}
       </td>
     </tr>`).join('');
 }
 
-async function markerEnUtbetalt(id) {
-  openModal('Marker som utbetalt', 'Bekreft at denne regningen er utbetalt.', [
+async function oppdaterStatus(id, nyStatus) {
+  const label = nyStatus === 'godkjent' ? 'Godkjenn' : 'Avvis';
+  const msg   = nyStatus === 'godkjent' ? 'Regningen godkjennes og går til eksport.' : 'Regningen avvises og vil ikke eksporteres.';
+  const cls   = nyStatus === 'godkjent' ? 'btn-green' : 'btn-primary';
+  openModal(label + ' regning', msg, [
     {label:'Avbryt', cls:'btn-outline', fn:'closeModal()'},
-    {label:'Marker utbetalt', cls:'btn-green', fn:`_doUtbetal('${id}')`},
+    {label:label, cls:cls, fn:`_doOppdater('${id}','${nyStatus}')`},
   ]);
 }
-window._doUtbetal = async function(id) {
+window._doOppdater = async function(id, nyStatus) {
   closeModal();
-  const { error } = await sb.from('dommerregninger').update({status:'utbetalt', utbetalt_dato: new Date().toISOString()}).eq('id', id);
+  const { error } = await sb.from('dommerregninger').update({status: nyStatus}).eq('id', id);
   if (error) { showToast('Feil – prøv igjen'); return; }
-  showToast('Markert som utbetalt');
+  showToast(nyStatus === 'godkjent' ? 'Regning godkjent' : 'Regning avvist');
   await loadOversikt();
 };
 
@@ -841,7 +859,7 @@ function renderEksportListe() {
   if (!eksportData.length) { el.innerHTML = '<div class="empty"><i class="ti ti-inbox"></i><p>Ingen regninger</p></div>'; return; }
   el.innerHTML = eksportData.map(r => `
     <div class="cb-row">
-      <input type="checkbox" id="ek_${r.id}" value="${r.id}" ${r.status==='ny'?'checked':''}>
+      <input type="checkbox" id="ek_${r.id}" value="${r.id}" ${r.status==='godkjent'?'checked':''}>
       <label for="ek_${r.id}">
         <span class="dot ${r.status==='ny'?'dot-blue':'dot-gray'}"></span>
         <strong>${esc(r.dommer_navn)}</strong> – ${fmtDato(r.kampdato)} –
@@ -852,7 +870,7 @@ function renderEksportListe() {
 }
 
 function downloadExcel(alle) {
-  const rows = alle ? eksportData : eksportData.filter(r => r.status === 'ny');
+  const rows = alle ? eksportData.filter(r => r.status === 'godkjent') : eksportData.filter(r => r.status === 'godkjent');
   if (!rows.length) { showToast('Ingen rader å eksportere'); return; }
   const avdMap = {'Fotball':'4','Håndball':'6'};
   const wb = XLSX.utils.book_new();
@@ -874,21 +892,21 @@ function downloadExcel(alle) {
   showToast('Excel lastet ned');
 }
 
-async function markerUtbetalt() {
+async function markerEksportert() {
   const checked = [...document.querySelectorAll('#eksportListe input[type=checkbox]:checked')].map(cb => cb.value);
   if (!checked.length) { showToast('Ingen valgte'); return; }
-  openModal(`Marker ${checked.length} regning(er) som utbetalt`, 'Dette kan ikke angres.', [
+  openModal(`Marker ${checked.length} regning(er) som eksportert`, 'Dette kan ikke angres.', [
     {label:'Avbryt', cls:'btn-outline', fn:'closeModal()'},
-    {label:'Marker utbetalt', cls:'btn-green', fn:`_doMarkerFlere(${JSON.stringify(checked)})`},
+    {label:'Marker eksportert', cls:'btn-green', fn:`_doMarkerFlere(${JSON.stringify(checked)})`},
   ]);
 }
 window._doMarkerFlere = async function(ids) {
   closeModal();
   const { error } = await sb.from('dommerregninger')
-    .update({status:'utbetalt', utbetalt_dato: new Date().toISOString()})
+    .update({status:'eksportert', eksportert_dato: new Date().toISOString()})
     .in('id', ids);
   if (error) { showToast('Feil – prøv igjen'); return; }
-  showToast(`${ids.length} regning(er) markert utbetalt`);
+  showToast(`${ids.length} regning(er) markert eksportert`);
   await loadEksport();
   await loadOversikt();
 };
