@@ -376,7 +376,7 @@ tbody td strong{color:var(--text);font-weight:600}
                 <th></th>
                 <th>Dommer</th>
                 <th>Dato</th>
-                <th>Idrett</th>
+                <th>Avd.</th>
                 <th>Kamp</th>
                 <th>Årsklasse</th>
                 <th>Honorar</th>
@@ -472,26 +472,31 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 // Satser per idrett
 const DEFAULT_SATSER = {
   Fotball: [
-    {aarstall:'5er (2019-2018)', sats:150},
-    {aarstall:'5er (2017-2016)', sats:150},
-    {aarstall:'7er (2015-2014)', sats:200},
-    {aarstall:'9er (2013)',      sats:400},
-    {aarstall:'11er',            sats:500},
-    {aarstall:'Senior 7er',      sats:450},
+    {aarstall:'G/J 2019 (5er)', sats:150},
+    {aarstall:'G/J 2018 (5er)', sats:150},
+    {aarstall:'G/J 2017 (5er)', sats:150},
+    {aarstall:'G/J 2016 (5er)', sats:150},
+    {aarstall:'G/J 2015 (7er)', sats:200},
+    {aarstall:'G/J 2014 (7er)', sats:200},
+    {aarstall:'G/J 2013 (9er)', sats:400},
+    {aarstall:'11er',           sats:500},
+    {aarstall:'Senior 7er',     sats:450},
   ],
   'Håndball': [
-    {aarstall:'4er (2020-2019)', sats:50},
-    {aarstall:'5er (2018-2017)', sats:100},
-    {aarstall:'2016',            sats:170},
-    {aarstall:'2015',            sats:225},
-    {aarstall:'2014',            sats:260},
-    {aarstall:'2013',            sats:260},
-    {aarstall:'2012',            sats:385},
-    {aarstall:'2011',            sats:385},
-    {aarstall:'Junior',          sats:440},
-    {aarstall:'Senior 3.div',    sats:675},
-    {aarstall:'Senior 4.div',    sats:435},
-    {aarstall:'Senior 5.-6.div', sats:410},
+    {aarstall:'G/J 2020 (4er)', sats:50},
+    {aarstall:'G/J 2019 (4er)', sats:50},
+    {aarstall:'G/J 2018 (5er)', sats:100},
+    {aarstall:'G/J 2017 (5er)', sats:100},
+    {aarstall:'G/J 2016',       sats:170},
+    {aarstall:'G/J 2015',       sats:225},
+    {aarstall:'G/J 2014',       sats:260},
+    {aarstall:'G/J 2013',       sats:260},
+    {aarstall:'G/J 2012',       sats:385},
+    {aarstall:'G/J 2011',       sats:385},
+    {aarstall:'Junior',         sats:440},
+    {aarstall:'Senior 3.div',   sats:675},
+    {aarstall:'Senior 4.div',   sats:435},
+    {aarstall:'Senior 5.-6.div',sats:410},
   ],
 };
 
@@ -797,7 +802,7 @@ function renderOversikt() {
         <span style="font-size:11px;color:var(--text4)">${esc(r.dommer_epost)}</span>
       </td>
       <td>${fmtDato(r.kampdato)}</td>
-      <td style="font-size:12px">${esc(r.idrett||'')}</td>
+      <td style="font-size:12px">${r.idrett==='Fotball'?'4':r.idrett==='Håndball'?'6':esc(r.idrett||'')}</td>
       <td style="font-size:12px">${esc(r.hjemmelag)} – ${esc(r.bortelag)}</td>
       <td>${esc(r.aarstall)}</td>
       <td style="font-weight:600;color:var(--blue)">${kr(r.honorar)}</td>
@@ -851,18 +856,18 @@ function renderEksportListe() {
 function downloadExcel(alle) {
   const rows = alle ? eksportData : eksportData.filter(r => r.status === 'ny');
   if (!rows.length) { showToast('Ingen rader å eksportere'); return; }
+  const avdMap = {'Fotball':'4','Håndball':'6'};
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet(rows.map(r => ({
     'Navn':         r.dommer_navn,
+    'Sum':          r.honorar,
+    'Avdeling':     avdMap[r.idrett] || r.idrett || '',
+    'Kontonummer':  r.kontonr,
     'E-post':       r.dommer_epost,
     'Telefon':      r.dommer_tlf,
-    'Kontonummer':  r.kontonr,
-    'Kampdato':     r.kampdato,
-    'Idrett':       r.idrett||'',
     'Hjemmelag':    r.hjemmelag,
     'Bortelag':     r.bortelag,
     'Årsklasse':    r.aarstall,
-    'Honorar (kr)': r.honorar,
     'Status':       r.status,
     'Sendt inn':    r.opprettet ? r.opprettet.slice(0,10) : '',
   })));
