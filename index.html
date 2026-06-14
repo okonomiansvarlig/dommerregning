@@ -187,6 +187,21 @@ tbody td strong{color:var(--text);font-weight:600}
 @media(min-width:701px){
   .mobile-topbar,.mobile-nav{display:none!important}
 }
+
+/* Historikk */
+.hist-card{background:var(--card);border:1px solid var(--border);border-radius:14px;margin-bottom:.75rem;overflow:hidden}
+.hist-header{padding:.875rem 1.125rem;display:flex;align-items:center;justify-content:space-between;cursor:pointer;gap:10px}
+.hist-header:hover{background:var(--bg)}
+.hist-name{font-weight:700;font-size:14px}
+.hist-meta{font-size:12px;color:var(--text3);margin-top:2px}
+.hist-stats{display:flex;gap:14px;align-items:center;flex-shrink:0}
+.hist-stat{text-align:right}
+.hist-stat-val{font-size:15px;font-weight:700}
+.hist-stat-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em}
+.hist-body{display:none;border-top:1px solid var(--border)}
+.hist-card.open .hist-body{display:block}
+.hist-card.open .hist-chevron{transform:rotate(180deg)}
+.hist-chevron{transition:transform .15s;color:var(--text4);font-size:18px;flex-shrink:0}
 </style>
 </head>
 <body>
@@ -336,6 +351,9 @@ tbody td strong{color:var(--text);font-weight:600}
         <button class="nav-item" id="nav_import" onclick="navTo('import')">
           <i class="ti ti-file-upload"></i>Importer
         </button>
+        <button class="nav-item" id="nav_historikk" onclick="navTo('historikk')">
+          <i class="ti ti-history"></i>Historikk
+        </button>
         <div style="margin:.5rem 1rem;border-top:1px solid var(--border)"></div>
         <button class="nav-item" onclick="showPublicForm()">
           <i class="ti ti-external-link"></i>Dommerskjema
@@ -474,6 +492,21 @@ tbody td strong{color:var(--text);font-weight:600}
         <div id="importResult" style="display:none"></div>
       </div>
 
+      <!-- HISTORIKK -->
+      <div id="page_historikk" class="page">
+        <div class="page-title">Dommerhistorikk</div>
+        <div class="card" style="margin-bottom:.75rem">
+          <div class="form-row" style="margin-bottom:0">
+            <label>Søk på navn eller e-post</label>
+            <input type="text" id="hist_sok" placeholder="F.eks. Ola Nordmann eller ola@epost.no" oninput="renderHistorikk()"/>
+          </div>
+        </div>
+        <div id="historikkListe"></div>
+        <div id="historikk_empty" class="empty" style="display:none">
+          <i class="ti ti-search-off"></i><p>Ingen treff</p>
+        </div>
+      </div>
+
       <!-- SATSER -->
       <div id="page_satser" class="page">
         <div class="page-title">Dommerhonorar – satser</div>
@@ -501,6 +534,9 @@ tbody td strong{color:var(--text);font-weight:600}
       </button>
       <button class="mobile-nav-btn" id="mnav_import" onclick="navTo('import')">
         <i class="ti ti-file-upload"></i><span>Importer</span>
+      </button>
+      <button class="mobile-nav-btn" id="mnav_historikk" onclick="navTo('historikk')">
+        <i class="ti ti-history"></i><span>Historikk</span>
       </button>
       <button class="mobile-nav-btn" onclick="showPublicForm()">
         <i class="ti ti-external-link"></i><span>Skjema</span>
@@ -789,7 +825,7 @@ async function showAdminApp() {
 }
 
 function navTo(page) {
-  ['oversikt','eksport','satser','import'].forEach(p => {
+  ['oversikt','eksport','satser','import','historikk'].forEach(p => {
     document.getElementById('page_'+p).classList.toggle('active', p===page);
     const si = document.getElementById('nav_'+p);
     const mi = document.getElementById('mnav_'+p);
@@ -798,6 +834,7 @@ function navTo(page) {
   });
   if (page === 'eksport') loadEksport();
   if (page === 'satser') renderSatser();
+  if (page === 'historikk') loadHistorikk();
 }
 
 // ── OVERSIKT ────────────────────────────────────────────────────────────────
@@ -1181,10 +1218,25 @@ async function doImport() {
     opprettet:     r.opprettet || new Date().toISOString(),
   }));
 
+  // Hent eksisterende for å unngå duplikater
+  const { data: eksisterende } = await sb.from('dommerregninger').select('dommer_navn,kampdato,hjemmelag,bortelag,aarstall');
+  const eksKey = new Set((eksisterende||[]).map(r =>
+    `${r.dommer_navn}|${r.kampdato}|${r.hjemmelag}|${r.bortelag}|${r.aarstall}`
+  ));
+  const nyeInserts = inserts.filter(r =>
+    !eksKey.has(`${r.dommer_navn}|${r.kampdato}|${r.hjemmelag}|${r.bortelag}|${r.aarstall}`)
+  );
+  if (!nyeInserts.length) {
+    btn.disabled = false; btn.textContent = 'Importer alle';
+    document.getElementById('importResult').style.display = 'block';
+    document.getElementById('importResult').innerHTML = '<div class="card" style="border-color:var(--yellow-border);background:var(--yellow-light)"><div style="font-size:14px;font-weight:600;color:var(--yellow-text)">Alle rader finnes allerede i databasen – ingenting ble importert.</div></div>';
+    return;
+  }
+
   // Insert in batches of 50
-  let ok = 0, feil = 0;
-  for (let i = 0; i < inserts.length; i += 50) {
-    const batch = inserts.slice(i, i+50);
+  let ok = 0, feil = 0, duplikater = inserts.length - nyeInserts.length;
+  for (let i = 0; i < nyeInserts.length; i += 50) {
+    const batch = nyeInserts.slice(i, i+50);
     const { error } = await sb.from('dommerregninger').insert(batch);
     if (error) { feil += batch.length; console.error(error); }
     else ok += batch.length;
@@ -1197,6 +1249,7 @@ async function doImport() {
   res.innerHTML = `<div class="card" style="border-color:${feil?'var(--red-border)':'var(--green-border)'};background:${feil?'var(--red-light)':'var(--green-light)'}">
     <div style="font-size:14px;font-weight:600;color:${feil?'var(--red)':'var(--green)'}">
       ${ok} rader importert${feil ? ', '+feil+' feilet' : ' – alt OK!'}
+      ${duplikater > 0 ? `<span style="font-weight:400;color:var(--yellow-text)"> · ${duplikater} duplikater hoppet over</span>` : ''}
     </div>
   </div>`;
 
@@ -1205,6 +1258,102 @@ async function doImport() {
     importRows = [];
     await loadOversikt();
   }
+}
+
+
+// ── HISTORIKK ────────────────────────────────────────────────────────────────
+let historikkData = [];
+async function loadHistorikk() {
+  const { data, error } = await sb.from('dommerregninger').select('*').order('kampdato', {ascending:false});
+  if (error) { console.error(error); return; }
+  historikkData = data || [];
+  renderHistorikk();
+}
+
+function renderHistorikk() {
+  const sok = (document.getElementById('hist_sok')?.value || '').trim().toLowerCase();
+  const el = document.getElementById('historikkListe');
+  const empty = document.getElementById('historikk_empty');
+
+  // Group by epost
+  const grupper = {};
+  historikkData.forEach(r => {
+    const key = (r.dommer_epost || '').toLowerCase();
+    if (!grupper[key]) grupper[key] = { navn: r.dommer_navn, epost: r.dommer_epost, tlf: r.dommer_tlf, regninger: [] };
+    grupper[key].regninger.push(r);
+  });
+
+  let dommere = Object.values(grupper);
+  if (sok) {
+    dommere = dommere.filter(d =>
+      (d.navn||'').toLowerCase().includes(sok) || (d.epost||'').toLowerCase().includes(sok)
+    );
+  }
+  // Sort by name
+  dommere.sort((a,b) => (a.navn||'').localeCompare(b.navn||'', 'nb'));
+
+  if (!dommere.length) {
+    el.innerHTML = ''; empty.style.display = 'block'; return;
+  }
+  empty.style.display = 'none';
+
+  el.innerHTML = dommere.map((d, i) => {
+    const sumGodkjent = d.regninger.filter(r=>r.status==='godkjent'||r.status==='eksportert').reduce((a,r)=>a+Number(r.honorar||0),0);
+    const antallNye = d.regninger.filter(r=>r.status==='ny').length;
+    const rader = d.regninger.map(r => `
+      <tr>
+        <td>${fmtDato(r.kampdato)}</td>
+        <td style="font-size:12px">${r.idrett==='Fotball'?'4':r.idrett==='Håndball'?'6':esc(r.idrett||'')}</td>
+        <td style="font-size:12px">${esc(r.hjemmelag)} – ${esc(r.bortelag)}</td>
+        <td>${esc(r.aarstall)}</td>
+        <td style="font-weight:600;color:var(--blue)">${kr(r.honorar)}</td>
+        <td style="font-size:11px;color:var(--text4)">${fmtTs(r.opprettet)}</td>
+        <td>
+          ${r.status==='ny' ? `<span class="badge badge-new">Ny</span>`
+          : r.status==='godkjent' ? `<span class="badge badge-paid">Godkjent</span>`
+          : r.status==='eksportert' ? `<span class="badge" style="background:var(--bg);color:var(--text4);border:1px solid var(--border)">Eksportert</span>`
+          : `<span class="badge" style="background:var(--red-light);color:var(--red)">Avvist</span>`}
+        </td>
+        <td style="font-size:11px;color:var(--text4)">${r.eksportert_dato ? fmtTs(r.eksportert_dato) : '–'}</td>
+      </tr>`).join('');
+
+    return `
+    <div class="hist-card" id="hist_${i}">
+      <div class="hist-header" onclick="document.getElementById('hist_${i}').classList.toggle('open')">
+        <div>
+          <div class="hist-name">${esc(d.navn)}</div>
+          <div class="hist-meta">${esc(d.epost)}${d.tlf ? ' · '+esc(d.tlf) : ''}</div>
+        </div>
+        <div class="hist-stats">
+          <div class="hist-stat">
+            <div class="hist-stat-val">${d.regninger.length}</div>
+            <div class="hist-stat-label">Regninger</div>
+          </div>
+          <div class="hist-stat">
+            <div class="hist-stat-val">${kr(sumGodkjent)}</div>
+            <div class="hist-stat-label">Godkjent</div>
+          </div>
+          ${antallNye > 0 ? `<div class="hist-stat">
+            <div class="hist-stat-val" style="color:var(--blue)">${antallNye}</div>
+            <div class="hist-stat-label">Nye</div>
+          </div>` : ''}
+          <i class="ti ti-chevron-down hist-chevron"></i>
+        </div>
+      </div>
+      <div class="hist-body">
+        <div class="table-wrap" style="border:none;border-radius:0">
+          <table>
+            <thead>
+              <tr>
+                <th>Dato</th><th>Avd.</th><th>Kamp</th><th>Årsklasse</th><th>Honorar</th><th>Sendt</th><th>Status</th><th>Eksportert</th>
+              </tr>
+            </thead>
+            <tbody>${rader}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
