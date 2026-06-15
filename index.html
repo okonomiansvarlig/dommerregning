@@ -394,8 +394,9 @@ tbody td strong{color:var(--text);font-weight:600}
         </div>
         <div id="bulkBar" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:.75rem;padding:10px 12px;background:var(--blue-light);border:1px solid var(--blue-border);border-radius:10px">
           <span id="bulkCount" style="font-size:13px;font-weight:600;color:var(--blue);flex:1"></span>
-          <button class="btn btn-green btn-sm" onclick="bulkOppdater('godkjent')"><i class="ti ti-check"></i>Godkjenn valgte</button>
-          <button class="btn btn-sm" style="background:var(--red-light);color:var(--red);border:1px solid var(--red-border)" onclick="bulkOppdater('avvist')"><i class="ti ti-x"></i>Avvis valgte</button>
+          <button class="btn btn-green btn-sm" id="bulkGodkjennBtn" onclick="bulkOppdater('godkjent')"><i class="ti ti-check"></i>Godkjenn valgte</button>
+          <button class="btn btn-sm" id="bulkAvvisBtn" style="background:var(--red-light);color:var(--red);border:1px solid var(--red-border)" onclick="bulkOppdater('avvist')"><i class="ti ti-x"></i>Avvis valgte</button>
+          <button class="btn btn-sm" style="background:var(--card);color:var(--red);border:1px solid var(--red-border)" onclick="bulkSlett()"><i class="ti ti-trash"></i>Slett valgte</button>
           <button class="btn btn-outline btn-sm" onclick="velgAlle(false)"><i class="ti ti-square"></i>Fjern valg</button>
         </div>
         <div class="table-wrap">
@@ -920,7 +921,7 @@ function renderOversikt() {
     return `
     <tr style="${dup ? 'background:var(--yellow-light)' : ''}">
       <td style="width:32px">
-        ${kanVelges ? `<input type="checkbox" class="rad-cb" value="${r.id}" onchange="oppdaterBulkBar()" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer"/>` : ''}
+        <input type="checkbox" class="rad-cb" value="${r.id}" data-status="${r.status}" onchange="oppdaterBulkBar()" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer"/>
       </td>
       <td>
         <span class="dot ${r.status==='ny'?'dot-blue':r.status==='godkjent'?'dot-green':r.status==='eksportert'?'dot-gray':'dot-red'}"></span>
@@ -937,16 +938,17 @@ function renderOversikt() {
       <td style="font-weight:600;color:var(--blue)">${kr(r.honorar)}</td>
       <td style="font-size:11px;color:var(--text4)">${fmtTs(r.opprettet)}</td>
       <td>
-        ${r.status==='ny'
-          ? `<div style="display:flex;gap:5px">
-              <button class="btn btn-green btn-sm" onclick="oppdaterStatus('${r.id}','godkjent')">Godkjenn</button>
-              <button class="btn btn-sm" style="background:var(--red-light);color:var(--red);border:1px solid var(--red-border)" onclick="oppdaterStatus('${r.id}','avvist')">Avvis</button>
-             </div>`
-          : r.status==='godkjent'
-          ? `<span class="badge badge-paid">Godkjent</span>`
-          : r.status==='eksportert'
-          ? `<span class="badge" style="background:var(--bg);color:var(--text4);border:1px solid var(--border)">Eksportert</span>`
-          : `<span class="badge" style="background:var(--red-light);color:var(--red)">Avvist</span>`}
+        <div style="display:flex;gap:5px;align-items:center">
+          ${r.status==='ny'
+            ? `<button class="btn btn-green btn-sm" onclick="oppdaterStatus('${r.id}','godkjent')">Godkjenn</button>
+               <button class="btn btn-sm" style="background:var(--red-light);color:var(--red);border:1px solid var(--red-border)" onclick="oppdaterStatus('${r.id}','avvist')">Avvis</button>`
+            : r.status==='godkjent'
+            ? `<span class="badge badge-paid">Godkjent</span>`
+            : r.status==='eksportert'
+            ? `<span class="badge" style="background:var(--bg);color:var(--text4);border:1px solid var(--border)">Eksportert</span>`
+            : `<span class="badge" style="background:var(--red-light);color:var(--red)">Avvist</span>`}
+          <button class="btn btn-sm btn-outline" style="padding:5px 8px" title="Slett innsending" onclick="slettInnsending('${r.id}','${esc(r.dommer_navn)}')"><i class="ti ti-trash"></i></button>
+        </div>
       </td>
     </tr>`;}).join('');
   oppdaterBulkBar();
@@ -960,6 +962,12 @@ function oppdaterBulkBar() {
   bar.style.display = valgte.length > 0 ? 'flex' : 'none';
   document.getElementById('bulkCount').textContent = valgte.length + ' valgt';
   if (cbAlle) cbAlle.checked = alle.length > 0 && valgte.length === alle.length;
+
+  const alleNy = valgte.length > 0 && valgte.every(cb => cb.dataset.status === 'ny');
+  const godkjennBtn = document.getElementById('bulkGodkjennBtn');
+  const avvisBtn    = document.getElementById('bulkAvvisBtn');
+  if (godkjennBtn) godkjennBtn.disabled = !alleNy;
+  if (avvisBtn) avvisBtn.disabled = !alleNy;
 }
 
 function velgAlle(checked) {
@@ -1009,6 +1017,78 @@ window._doOppdater = async function(id, nyStatus) {
   if (error) { showToast('Feil – prøv igjen'); return; }
   showToast(nyStatus === 'godkjent' ? 'Regning godkjent' : 'Regning avvist');
   await loadOversikt();
+};
+
+async function slettInnsending(id, navn) {
+  openModal('Slett innsending', `Er du sikker på at du vil slette denne regningen fra ${navn}? Dette kan ikke angres.`, [
+    {label:'Avbryt', cls:'btn-outline', fn:'closeModal()'},
+    {label:'Slett', cls:'btn-primary', fn:`_doSlett('${id}')`},
+  ]);
+}
+window._doSlett = async function(id) {
+  closeModal();
+  const { error } = await sb.from('dommerregninger').delete().eq('id', id);
+  if (error) { showToast('Feil – prøv igjen'); return; }
+  showToast('Innsending slettet');
+  await loadOversikt();
+};
+
+async function bulkSlett() {
+  const ids = [...document.querySelectorAll('.rad-cb:checked')].map(cb => cb.value);
+  if (!ids.length) return;
+  openModal(`Slett ${ids.length} innsending(er)`, `Er du sikker på at du vil slette ${ids.length} regning(er)? Dette kan ikke angres.`, [
+    {label:'Avbryt', cls:'btn-outline', fn:'closeModal()'},
+    {label:'Slett alle', cls:'btn-primary', fn:`_doBulkSlett(${JSON.stringify(ids)})`},
+  ]);
+}
+window._doBulkSlett = async function(ids) {
+  closeModal();
+  const { error } = await sb.from('dommerregninger').delete().in('id', ids);
+  if (error) { showToast('Feil – prøv igjen'); return; }
+  showToast(`${ids.length} innsending(er) slettet`);
+  await loadOversikt();
+};
+
+function velgAlleHist(i, checked) {
+  document.querySelectorAll('.hist-cb-' + i).forEach(cb => cb.checked = checked);
+  oppdaterHistBulkBar(i);
+}
+
+function oppdaterHistBulkBar(i) {
+  const valgte = [...document.querySelectorAll('.hist-cb-' + i + ':checked')];
+  const bar = document.getElementById('histBulkBar_' + i);
+  bar.style.display = valgte.length > 0 ? 'flex' : 'none';
+  document.getElementById('histBulkCount_' + i).textContent = valgte.length + ' valgt';
+}
+
+async function bulkSlettHist(i) {
+  const ids = [...document.querySelectorAll('.hist-cb-' + i + ':checked')].map(cb => cb.value);
+  if (!ids.length) return;
+  openModal(`Slett ${ids.length} innsending(er)`, `Er du sikker på at du vil slette ${ids.length} regning(er)? Dette kan ikke angres.`, [
+    {label:'Avbryt', cls:'btn-outline', fn:'closeModal()'},
+    {label:'Slett alle', cls:'btn-primary', fn:`_doBulkSlettHist(${JSON.stringify(ids)})`},
+  ]);
+}
+window._doBulkSlettHist = async function(ids) {
+  closeModal();
+  const { error } = await sb.from('dommerregninger').delete().in('id', ids);
+  if (error) { showToast('Feil – prøv igjen'); return; }
+  showToast(`${ids.length} innsending(er) slettet`);
+  await loadHistorikk();
+};
+
+async function slettFraHistorikk(id, navn) {
+  openModal('Slett innsending', `Er du sikker på at du vil slette denne regningen fra ${navn}? Dette kan ikke angres.`, [
+    {label:'Avbryt', cls:'btn-outline', fn:'closeModal()'},
+    {label:'Slett', cls:'btn-primary', fn:`_doSlettHistorikk('${id}')`},
+  ]);
+}
+window._doSlettHistorikk = async function(id) {
+  closeModal();
+  const { error } = await sb.from('dommerregninger').delete().eq('id', id);
+  if (error) { showToast('Feil – prøv igjen'); return; }
+  showToast('Innsending slettet');
+  await loadHistorikk();
 };
 
 // ── EKSPORT ─────────────────────────────────────────────────────────────────
@@ -1302,6 +1382,7 @@ function renderHistorikk() {
     const antallNye = d.regninger.filter(r=>r.status==='ny').length;
     const rader = d.regninger.map(r => `
       <tr>
+        <td><input type="checkbox" class="hist-cb-${i}" value="${r.id}" onchange="oppdaterHistBulkBar(${i})" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer"/></td>
         <td>${fmtDato(r.kampdato)}</td>
         <td style="font-size:12px">${r.idrett==='Fotball'?'4':r.idrett==='Håndball'?'6':esc(r.idrett||'')}</td>
         <td style="font-size:12px">${esc(r.hjemmelag)} – ${esc(r.bortelag)}</td>
@@ -1315,6 +1396,7 @@ function renderHistorikk() {
           : `<span class="badge" style="background:var(--red-light);color:var(--red)">Avvist</span>`}
         </td>
         <td style="font-size:11px;color:var(--text4)">${r.eksportert_dato ? fmtTs(r.eksportert_dato) : '–'}</td>
+        <td><button class="btn btn-sm btn-outline" style="padding:5px 8px" title="Slett innsending" onclick="slettFraHistorikk('${r.id}','${esc(d.navn)}')"><i class="ti ti-trash"></i></button></td>
       </tr>`).join('');
 
     return `
@@ -1341,11 +1423,16 @@ function renderHistorikk() {
         </div>
       </div>
       <div class="hist-body">
+        <div id="histBulkBar_${i}" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 1.125rem;background:var(--blue-light);border-bottom:1px solid var(--blue-border)">
+          <span id="histBulkCount_${i}" style="font-size:13px;font-weight:600;color:var(--blue);flex:1"></span>
+          <button class="btn btn-sm" style="background:var(--card);color:var(--red);border:1px solid var(--red-border)" onclick="bulkSlettHist(${i})"><i class="ti ti-trash"></i>Slett valgte</button>
+        </div>
         <div class="table-wrap" style="border:none;border-radius:0">
           <table>
             <thead>
               <tr>
-                <th>Dato</th><th>Avd.</th><th>Kamp</th><th>Årsklasse</th><th>Honorar</th><th>Sendt</th><th>Status</th><th>Eksportert</th>
+                <th style="width:32px"><input type="checkbox" onchange="velgAlleHist(${i}, this.checked)" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer"/></th>
+                <th>Dato</th><th>Avd.</th><th>Kamp</th><th>Årsklasse</th><th>Honorar</th><th>Sendt</th><th>Status</th><th>Eksportert</th><th></th>
               </tr>
             </thead>
             <tbody>${rader}</tbody>
