@@ -6,6 +6,7 @@
 <title>Sagene IF – Dommerregning</title>
 <meta name="theme-color" content="#b5191a"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-title" content="Dommerregning"/>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -1459,7 +1460,7 @@ function openModal(title, body, btns) {
   document.getElementById('modal_title').textContent = title;
   document.getElementById('modal_body').textContent = body;
   document.getElementById('modal_btns').innerHTML = btns.map(b =>
-    `<button class="btn ${b.cls}" onclick="${b.fn}">${b.label}</button>`
+    `<button class="btn ${b.cls}" onclick="${b.fn.replace(/"/g,'&quot;')}">${b.label}</button>`
   ).join('');
   document.getElementById('modalOverlay').style.display = 'flex';
 }
