@@ -1094,10 +1094,20 @@ window._doSlettHistorikk = async function(id) {
 
 // ── EKSPORT ─────────────────────────────────────────────────────────────────
 let eksportData = [];
+let eksportLogg = {};
 async function loadEksport() {
-  const { data, error } = await sb.from('dommerregninger').select('*').order('kampdato', {ascending: false});
+  const [{ data, error }, { data: logg }] = await Promise.all([
+    sb.from('dommerregninger').select('*').order('kampdato', {ascending: false}),
+    sb.from('dommerregninger_eksport_logg').select('*').order('eksportert_dato', {ascending: false}),
+  ]);
   if (error) return;
   eksportData = data || [];
+  // Group logg by regning_id
+  eksportLogg = {};
+  (logg || []).forEach(l => {
+    if (!eksportLogg[l.regning_id]) eksportLogg[l.regning_id] = [];
+    eksportLogg[l.regning_id].push(l);
+  });
   renderEksportListe();
 }
 
@@ -1113,7 +1123,15 @@ function renderEksportListe() {
         <strong>${esc(r.dommer_navn)}</strong> – ${fmtDato(r.kampdato)} –
         ${esc(r.hjemmelag)} vs ${esc(r.bortelag)} (${esc(r.aarstall)}) –
         <span style="color:var(--blue);font-weight:600">${kr(r.honorar)}</span>
-        ${r.status==='eksportert'
+        ${(eksportLogg[r.id] && eksportLogg[r.id].length > 0)
+          ? `<div style="margin-top:4px">
+              ${eksportLogg[r.id].map((l,i) =>
+                `<span style="font-size:11px;color:var(--text4);display:block">
+                  ⚠️ Eksport ${eksportLogg[r.id].length > 1 ? (eksportLogg[r.id].length - i) + '. gang: ' : ''}${fmtTs(l.eksportert_dato)}${l.eksportert_av ? ' av ' + esc(l.eksportert_av) : ''}
+                </span>`
+              ).join('')}
+            </div>`
+          : r.status==='eksportert'
           ? `<span style="font-size:11px;color:var(--text4);margin-left:6px">⚠️ Eksportert ${fmtTs(r.eksportert_dato)}${r.eksportert_av ? ' av '+esc(r.eksportert_av) : ''}</span>`
           : ''}
       </label>
@@ -1153,10 +1171,18 @@ async function markerEksportert() {
 }
 window._doMarkerFlere = async function(ids) {
   closeModal();
+  const now = new Date().toISOString();
+  const av  = currentUser?.email || '';
+
   const { error } = await sb.from('dommerregninger')
-    .update({status:'eksportert', eksportert_dato: new Date().toISOString(), eksportert_av: currentUser?.email || ''})
+    .update({status:'eksportert', eksportert_dato: now, eksportert_av: av})
     .in('id', ids);
   if (error) { showToast('Feil – prøv igjen'); return; }
+
+  // Logg hver eksport
+  const loggRader = ids.map(id => ({regning_id: id, eksportert_dato: now, eksportert_av: av}));
+  await sb.from('dommerregninger_eksport_logg').insert(loggRader);
+
   showToast(`${ids.length} regning(er) markert eksportert`);
   await loadEksport();
   await loadOversikt();
