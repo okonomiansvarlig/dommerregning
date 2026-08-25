@@ -437,8 +437,8 @@ tbody td strong{color:var(--text);font-weight:600}
               </div>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <button class="btn btn-outline" onclick="downloadExcel(false)"><i class="ti ti-download"></i>Kun nye</button>
-              <button class="btn btn-outline" onclick="downloadExcel(true)"><i class="ti ti-download"></i>Alle</button>
+              <button class="btn btn-outline" onclick="downloadExcel(true)"><i class="ti ti-download"></i>Kun nye</button>
+              <button class="btn btn-outline" onclick="downloadExcel(false)"><i class="ti ti-download"></i>Alle</button>
             </div>
           </div>
         </div>
@@ -1123,23 +1123,28 @@ function renderEksportListe() {
         <strong>${esc(r.dommer_navn)}</strong> – ${fmtDato(r.kampdato)} –
         ${esc(r.hjemmelag)} vs ${esc(r.bortelag)} (${esc(r.aarstall)}) –
         <span style="color:var(--blue);font-weight:600">${kr(r.honorar)}</span>
-        ${(eksportLogg[r.id] && eksportLogg[r.id].length > 0)
-          ? `<div style="margin-top:4px">
-              ${eksportLogg[r.id].map((l,i) =>
-                `<span style="font-size:11px;color:var(--text4);display:block">
-                  ⚠️ Eksport ${eksportLogg[r.id].length > 1 ? (eksportLogg[r.id].length - i) + '. gang: ' : ''}${fmtTs(l.eksportert_dato)}${l.eksportert_av ? ' av ' + esc(l.eksportert_av) : ''}
-                </span>`
-              ).join('')}
-            </div>`
-          : r.status==='eksportert'
-          ? `<span style="font-size:11px;color:var(--text4);margin-left:6px">⚠️ Eksportert ${fmtTs(r.eksportert_dato)}${r.eksportert_av ? ' av '+esc(r.eksportert_av) : ''}</span>`
-          : ''}
+        ${(() => {
+            const logg = eksportLogg[r.id] || [];
+            // Check if the old eksportert_dato is already covered by a logg entry (within 1 min)
+            const gammelDekket = !r.eksportert_dato || logg.some(l => Math.abs(new Date(l.eksportert_dato) - new Date(r.eksportert_dato)) < 60000);
+            const alleLinjer = [...logg];
+            if (r.eksportert_dato && !gammelDekket) {
+              alleLinjer.push({eksportert_dato: r.eksportert_dato, eksportert_av: r.eksportert_av, _gammel: true});
+              alleLinjer.sort((a,b) => new Date(b.eksportert_dato) - new Date(a.eksportert_dato));
+            }
+            if (!alleLinjer.length) return '';
+            return `<div style="margin-top:4px">${alleLinjer.map((l,i) =>
+              `<span style="font-size:11px;color:var(--text4);display:block">⚠️${alleLinjer.length > 1 ? ' '+(alleLinjer.length-i)+'. gang:' : ''} ${fmtTs(l.eksportert_dato)}${l.eksportert_av ? ' av '+esc(l.eksportert_av) : ''}</span>`
+            ).join('')}</div>`;
+          })()}
       </label>
     </div>`).join('');
 }
 
-function downloadExcel(alle) {
-  const rows = eksportData.filter(r => r.status === 'godkjent' || r.status === 'eksportert');
+async function downloadExcel(kunNye) {
+  const rows = kunNye
+    ? eksportData.filter(r => r.status === 'godkjent')
+    : eksportData.filter(r => r.status === 'godkjent' || r.status === 'eksportert');
   if (!rows.length) { showToast('Ingen rader å eksportere'); return; }
   const avdMap = {'Fotball':'4','Håndball':'6'};
   const wb = XLSX.utils.book_new();
@@ -1158,7 +1163,18 @@ function downloadExcel(alle) {
   })));
   XLSX.utils.book_append_sheet(wb, ws, 'Dommerregninger');
   XLSX.writeFile(wb, `dommerregninger_${new Date().toISOString().slice(0,10)}.xlsx`);
-  showToast('Excel lastet ned');
+  showToast('Excel lastet ned – markerer som eksportert…');
+
+  // Marker alle nedlastede som eksportert og logg
+  const ids = rows.map(r => r.id);
+  const now = new Date().toISOString();
+  const av  = currentUser?.email || '';
+  await sb.from('dommerregninger').update({status:'eksportert', eksportert_dato: now, eksportert_av: av}).in('id', ids);
+  const loggRader = ids.map(id => ({regning_id: id, eksportert_dato: now, eksportert_av: av}));
+  const { error: loggError } = await sb.from('dommerregninger_eksport_logg').insert(loggRader);
+  if (loggError) console.error('Logg-feil:', loggError);
+  await loadEksport();
+  await loadOversikt();
 }
 
 async function markerEksportert() {
@@ -1434,13 +1450,19 @@ function renderHistorikk() {
           : r.status==='eksportert' ? `<span class="badge" style="background:var(--bg);color:var(--text4);border:1px solid var(--border)">Eksportert</span>`
           : `<span class="badge" style="background:var(--red-light);color:var(--red)">Avvist</span>`}
         </td>
-        <td style="font-size:11px;color:var(--text4)">
-          ${historikkLogg[r.id] && historikkLogg[r.id].length > 0
-            ? historikkLogg[r.id].map((l,i) =>
-                `<span style="display:block">${historikkLogg[r.id].length > 1 ? (historikkLogg[r.id].length-i)+'. ' : ''}${fmtTs(l.eksportert_dato)}${l.eksportert_av ? '<br>'+esc(l.eksportert_av) : ''}</span>`
-              ).join('')
-            : r.eksportert_dato ? fmtTs(r.eksportert_dato) + (r.eksportert_av ? '<br>'+esc(r.eksportert_av) : '') : '–'}
-        </td>
+        <td style="font-size:11px;color:var(--text4)">${(() => {
+            const logg = historikkLogg[r.id] || [];
+            const gammelDekket = !r.eksportert_dato || logg.some(l => Math.abs(new Date(l.eksportert_dato) - new Date(r.eksportert_dato)) < 60000);
+            const alleLinjer = [...logg];
+            if (r.eksportert_dato && !gammelDekket) {
+              alleLinjer.push({eksportert_dato: r.eksportert_dato, eksportert_av: r.eksportert_av});
+              alleLinjer.sort((a,b) => new Date(b.eksportert_dato) - new Date(a.eksportert_dato));
+            }
+            if (!alleLinjer.length) return '–';
+            return alleLinjer.map((l,i) =>
+              `<span style="display:block">${alleLinjer.length > 1 ? (alleLinjer.length-i)+'. ' : ''}${fmtTs(l.eksportert_dato)}${l.eksportert_av ? '<br>'+esc(l.eksportert_av) : ''}</span>`
+            ).join('');
+          })()}</td>
         <td><button class="btn btn-sm btn-outline" style="padding:5px 8px" title="Slett innsending" onclick="slettFraHistorikk('${r.id}','${esc(d.navn)}')"><i class="ti ti-trash"></i></button></td>
       </tr>`).join('');
 
