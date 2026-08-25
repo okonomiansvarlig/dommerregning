@@ -1107,19 +1107,21 @@ function renderEksportListe() {
   if (!visData.length) { el.innerHTML = '<div class="empty"><i class="ti ti-inbox"></i><p>Ingen godkjente regninger</p></div>'; return; }
   el.innerHTML = visData.map(r => `
     <div class="cb-row">
-      <input type="checkbox" id="ek_${r.id}" value="${r.id}" ${r.status==='godkjent'?'checked':'disabled'}>
+      <input type="checkbox" id="ek_${r.id}" value="${r.id}" checked>
       <label for="ek_${r.id}">
         <span class="dot ${r.status==='godkjent'?'dot-green':'dot-gray'}"></span>
         <strong>${esc(r.dommer_navn)}</strong> – ${fmtDato(r.kampdato)} –
         ${esc(r.hjemmelag)} vs ${esc(r.bortelag)} (${esc(r.aarstall)}) –
         <span style="color:var(--blue);font-weight:600">${kr(r.honorar)}</span>
-        ${r.status==='eksportert' ? `<span style="font-size:11px;color:var(--text4);margin-left:6px">Eksportert ${fmtTs(r.eksportert_dato)}</span>` : ''}
+        ${r.status==='eksportert'
+          ? `<span style="font-size:11px;color:var(--text4);margin-left:6px">⚠️ Eksportert tidligere: ${fmtTs(r.eksportert_dato)}</span>`
+          : ''}
       </label>
     </div>`).join('');
 }
 
 function downloadExcel(alle) {
-  const rows = alle ? eksportData.filter(r => r.status === 'godkjent') : eksportData.filter(r => r.status === 'godkjent');
+  const rows = eksportData.filter(r => r.status === 'godkjent' || r.status === 'eksportert');
   if (!rows.length) { showToast('Ingen rader å eksportere'); return; }
   const avdMap = {'Fotball':'4','Håndball':'6'};
   const wb = XLSX.utils.book_new();
