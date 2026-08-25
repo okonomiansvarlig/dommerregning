@@ -1114,7 +1114,7 @@ function renderEksportListe() {
         ${esc(r.hjemmelag)} vs ${esc(r.bortelag)} (${esc(r.aarstall)}) –
         <span style="color:var(--blue);font-weight:600">${kr(r.honorar)}</span>
         ${r.status==='eksportert'
-          ? `<span style="font-size:11px;color:var(--text4);margin-left:6px">⚠️ Eksportert tidligere: ${fmtTs(r.eksportert_dato)}</span>`
+          ? `<span style="font-size:11px;color:var(--text4);margin-left:6px">⚠️ Eksportert ${fmtTs(r.eksportert_dato)}${r.eksportert_av ? ' av '+esc(r.eksportert_av) : ''}</span>`
           : ''}
       </label>
     </div>`).join('');
@@ -1154,7 +1154,7 @@ async function markerEksportert() {
 window._doMarkerFlere = async function(ids) {
   closeModal();
   const { error } = await sb.from('dommerregninger')
-    .update({status:'eksportert', eksportert_dato: new Date().toISOString()})
+    .update({status:'eksportert', eksportert_dato: new Date().toISOString(), eksportert_av: currentUser?.email || ''})
     .in('id', ids);
   if (error) { showToast('Feil – prøv igjen'); return; }
   showToast(`${ids.length} regning(er) markert eksportert`);
@@ -1398,7 +1398,7 @@ function renderHistorikk() {
           : r.status==='eksportert' ? `<span class="badge" style="background:var(--bg);color:var(--text4);border:1px solid var(--border)">Eksportert</span>`
           : `<span class="badge" style="background:var(--red-light);color:var(--red)">Avvist</span>`}
         </td>
-        <td style="font-size:11px;color:var(--text4)">${r.eksportert_dato ? fmtTs(r.eksportert_dato) : '–'}</td>
+        <td style="font-size:11px;color:var(--text4)">${r.eksportert_dato ? fmtTs(r.eksportert_dato) + (r.eksportert_av ? '<br><span style=\"color:var(--text4)\">' + esc(r.eksportert_av) + '</span>' : '') : '–'}</td>
         <td><button class="btn btn-sm btn-outline" style="padding:5px 8px" title="Slett innsending" onclick="slettFraHistorikk('${r.id}','${esc(d.navn)}')"><i class="ti ti-trash"></i></button></td>
       </tr>`).join('');
 
