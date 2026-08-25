@@ -290,17 +290,43 @@ tbody td strong{color:var(--text);font-weight:600}
     <button class="submit-btn" id="f_submit" onclick="submitForm()">Send inn regning</button>
   </div>
 
-  <div style="margin-top:1.5rem;text-align:center">
+  <div style="margin-top:1.5rem;text-align:center;display:flex;flex-direction:column;gap:8px;align-items:center">
+    <a href="#" onclick="showSjekkStatus();return false" style="font-size:13px;color:var(--text3)">Sjekk status på tidligere innsendt regning</a>
     <a href="#" id="adminBackLink" onclick="showAdminApp();return false" style="font-size:12px;color:var(--text4);display:none">← Tilbake til admin</a>
     <a href="#" id="adminLoginLink" onclick="showLogin();return false" style="font-size:12px;color:var(--text4)">Admin</a>
+  </div>
+</div>
+
+<!-- Sjekk status -->
+<div id="sjekkStatusWrap" class="form-wrap" style="display:none">
+  <div class="form-header">
+    <div class="form-header-inner">
+      <div class="form-logo"><i class="ti ti-search"></i></div>
+      <div>
+        <h1>Sjekk status på regning</h1>
+        <p>Finn dine innsendte dommerregninger</p>
+      </div>
+    </div>
+  </div>
+  <div class="form-card">
+    <div class="form-row">
+      <label>Din e-postadresse<span class="req">*</span></label>
+      <input type="email" id="sjekk_epost" placeholder="navn@epost.no" onkeydown="if(event.key==='Enter')sjekkStatus()"/>
+    </div>
+    <button class="submit-btn" onclick="sjekkStatus()">Søk</button>
+    <div class="form-error" id="sjekk_error"></div>
+    <div id="sjekk_resultat" style="margin-top:1.25rem;display:none"></div>
+  </div>
+  <div style="margin-top:1.5rem;text-align:center">
+    <a href="#" onclick="showPublicForm();return false" style="font-size:13px;color:var(--text3)">← Tilbake til skjema</a>
   </div>
 </div>
 
 <!-- Success -->
 <div id="successScreen" class="success-wrap" style="display:none">
   <div class="success-icon"><i class="ti ti-check"></i></div>
-  <h2>Regning sendt!</h2>
-  <p>Takk – vi har mottatt dommerregningen din og utbetaler til oppgitt konto.</p>
+  <h2>Dommerregning mottatt!</h2>
+  <p>Vi sender alle dommerregninger til regnskapsfører hver fredag, og utbetaling vil skje uken etter.</p>
   <button class="new-btn" onclick="resetForm()"><i class="ti ti-plus" style="font-size:14px;margin-right:4px"></i>Send ny regning</button>
 </div>
 
@@ -349,9 +375,6 @@ tbody td strong{color:var(--text);font-weight:600}
         <button class="nav-item" id="nav_satser" onclick="navTo('satser')">
           <i class="ti ti-coin"></i>Satser
         </button>
-        <button class="nav-item" id="nav_import" onclick="navTo('import')">
-          <i class="ti ti-file-upload"></i>Importer
-        </button>
         <button class="nav-item" id="nav_historikk" onclick="navTo('historikk')">
           <i class="ti ti-history"></i>Historikk
         </button>
@@ -388,10 +411,16 @@ tbody td strong{color:var(--text);font-weight:600}
             <option value="avvist">Avvist</option>
             <option value="eksportert">Eksportert</option>
           </select>
+          <select class="filter-select" id="fil_idrett" onchange="loadOversikt()">
+            <option value="">Alle idretter</option>
+            <option value="Fotball">Fotball</option>
+            <option value="Håndball">Håndball</option>
+          </select>
           <select class="filter-select" id="fil_aar" onchange="loadOversikt()">
             <option value="">Alle årsklasser</option>
           </select>
           <input type="month" id="fil_mnd" class="filter-select" style="min-width:0;width:140px" onchange="loadOversikt()" title="Filtrer på måned"/>
+          <button class="btn btn-outline btn-sm" onclick="nullstillFilter()" title="Nullstill filter"><i class="ti ti-filter-off"></i>Nullstill</button>
         </div>
         <div id="bulkBar" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:.75rem;padding:10px 12px;background:var(--blue-light);border:1px solid var(--blue-border);border-radius:10px">
           <span id="bulkCount" style="font-size:13px;font-weight:600;color:var(--blue);flex:1"></span>
@@ -404,15 +433,15 @@ tbody td strong{color:var(--text);font-weight:600}
           <table>
             <thead>
               <tr>
-                <th style="width:32px"><input type="checkbox" id="cb_alle" onchange="velgAlle(this.checked)" title="Velg alle nye" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer"/></th>
+                <th style="width:32px"><input type="checkbox" id="cb_alle" onchange="velgAlle(this.checked)" title="Velg alle" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer"/></th>
                 <th></th>
-                <th>Dommer</th>
-                <th>Dato</th>
+                <th onclick="sorter('dommer_navn')" style="cursor:pointer;user-select:none">Dommer <span id="sort_dommer_navn"></span></th>
+                <th onclick="sorter('kampdato')" style="cursor:pointer;user-select:none">Dato <span id="sort_kampdato"></span></th>
                 <th>Avd.</th>
                 <th>Kamp</th>
                 <th>Årsklasse</th>
-                <th>Honorar</th>
-                <th>Sendt</th>
+                <th onclick="sorter('honorar')" style="cursor:pointer;user-select:none">Honorar <span id="sort_honorar"></span></th>
+                <th onclick="sorter('opprettet')" style="cursor:pointer;user-select:none">Sendt <span id="sort_opprettet"></span></th>
                 <th></th>
               </tr>
             </thead>
@@ -533,9 +562,6 @@ tbody td strong{color:var(--text);font-weight:600}
       </button>
       <button class="mobile-nav-btn" id="mnav_satser" onclick="navTo('satser')">
         <i class="ti ti-coin"></i><span>Satser</span>
-      </button>
-      <button class="mobile-nav-btn" id="mnav_import" onclick="navTo('import')">
-        <i class="ti ti-file-upload"></i><span>Importer</span>
       </button>
       <button class="mobile-nav-btn" id="mnav_historikk" onclick="navTo('historikk')">
         <i class="ti ti-history"></i><span>Historikk</span>
@@ -685,8 +711,10 @@ function updateHonorar() {
   if (!box) return;
   const liste  = getSatserForIdrett(idrett);
   const funnet = liste.find(s => s.aarstall === val);
-  if (funnet) {
+  if (funnet && funnet.sats > 0) {
     box.innerHTML = `<span class="honorar-label">Honorar</span><span class="honorar-amount">${funnet.sats} kr</span>`;
+  } else if (funnet && funnet.sats === 0) {
+    box.innerHTML = `<span class="honorar-label" style="color:var(--red)">Honorar</span><span style="font-size:14px;color:var(--red);font-weight:600">⚠️ Sats ikke satt – kontakt klubben</span>`;
   } else {
     box.innerHTML = `<span class="honorar-label">Honorar</span><span class="honorar-empty">Velg årsklasse</span>`;
   }
@@ -787,8 +815,66 @@ async function submitForm() {
   document.getElementById('successScreen').style.display = 'flex';
 }
 
+
+// ── SJEKK STATUS (public) ─────────────────────────────────────────────────
+function showSjekkStatus() {
+  document.getElementById('publicForm').style.display = 'none';
+  document.getElementById('successScreen').style.display = 'none';
+  document.getElementById('sjekkStatusWrap').style.display = 'flex';
+  document.getElementById('loginWrap').style.display = 'none';
+  document.getElementById('adminApp').style.display = 'none';
+  document.getElementById('sjekk_resultat').style.display = 'none';
+  document.getElementById('sjekk_error').style.display = 'none';
+  document.getElementById('sjekk_epost').value = '';
+}
+
+async function sjekkStatus() {
+  const epost = document.getElementById('sjekk_epost').value.trim().toLowerCase();
+  const err   = document.getElementById('sjekk_error');
+  err.style.display = 'none';
+  if (!epost || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(epost)) {
+    err.textContent = 'Skriv inn en gyldig e-postadresse.'; err.style.display = 'block'; return;
+  }
+  const { data, error } = await sb.from('dommerregninger')
+    .select('dommer_navn,kampdato,hjemmelag,bortelag,aarstall,honorar,status,opprettet')
+    .ilike('dommer_epost', epost)
+    .order('kampdato', {ascending: false});
+
+  if (error || !data) { err.textContent = 'Noe gikk galt. Prøv igjen.'; err.style.display = 'block'; return; }
+
+  const res = document.getElementById('sjekk_resultat');
+  res.style.display = 'block';
+  if (!data.length) {
+    res.innerHTML = `<div style="text-align:center;color:var(--text3);font-size:14px;padding:1rem 0">Ingen regninger funnet for denne e-postadressen.</div>`;
+    return;
+  }
+
+  const statusTekst = {
+    'ny':         {txt:'Mottatt – til behandling', bg:'var(--blue-light)',   color:'var(--blue)'},
+    'godkjent':   {txt:'Godkjent',                 bg:'var(--green-light)',  color:'var(--green)'},
+    'avvist':     {txt:'Avvist – kontakt klubben',  bg:'var(--red-light)',    color:'var(--red)'},
+    'eksportert': {txt:'Sendt til utbetaling',      bg:'var(--green-light)',  color:'var(--green)'},
+  };
+
+  res.innerHTML = `
+    <div style="font-size:13px;font-weight:600;color:var(--text3);margin-bottom:.75rem">${data.length} regning(er) funnet</div>
+    ${data.map(r => {
+      const s = statusTekst[r.status] || {txt:r.status, bg:'var(--bg)', color:'var(--text3)'};
+      return `<div style="border:1px solid var(--border);border-radius:10px;padding:.875rem 1rem;margin-bottom:.625rem;background:var(--card)">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <div>
+            <div style="font-size:14px;font-weight:600">${fmtDato(r.kampdato)} – ${esc(r.hjemmelag)} vs ${esc(r.bortelag)}</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:2px">${esc(r.aarstall)} · ${kr(r.honorar)} · Sendt inn ${fmtDato(r.opprettet)}</div>
+          </div>
+          <span style="font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;background:${s.bg};color:${s.color}">${s.txt}</span>
+        </div>
+      </div>`;
+    }).join('')}`;
+}
+
 // ── LOGIN ───────────────────────────────────────────────────────────────────
 function showLogin() {
+  document.getElementById('sjekkStatusWrap').style.display = 'none';
   document.getElementById('publicForm').style.display = 'none';
   document.getElementById('successScreen').style.display = 'none';
   document.getElementById('loginWrap').style.display = 'flex';
@@ -817,6 +903,7 @@ async function doLogout() {
 
 // ── ADMIN APP ───────────────────────────────────────────────────────────────
 async function showAdminApp() {
+  document.getElementById('sjekkStatusWrap').style.display = 'none';
   document.getElementById('publicForm').style.display = 'none';
   document.getElementById('loginWrap').style.display = 'none';
   document.getElementById('adminApp').style.display = 'flex';
@@ -827,7 +914,7 @@ async function showAdminApp() {
 }
 
 function navTo(page) {
-  ['oversikt','eksport','satser','import','historikk'].forEach(p => {
+  ['oversikt','eksport','satser','historikk'].forEach(p => {
     document.getElementById('page_'+p).classList.toggle('active', p===page);
     const si = document.getElementById('nav_'+p);
     const mi = document.getElementById('mnav_'+p);
@@ -840,13 +927,45 @@ function navTo(page) {
 }
 
 // ── OVERSIKT ────────────────────────────────────────────────────────────────
+let sortKol = 'opprettet';
+let sortDir = 'desc';
+
+function sorter(kol) {
+  if (sortKol === kol) { sortDir = sortDir === 'asc' ? 'desc' : 'asc'; }
+  else { sortKol = kol; sortDir = 'asc'; }
+  // Update indicators
+  ['dommer_navn','kampdato','honorar','opprettet'].forEach(k => {
+    const el = document.getElementById('sort_'+k);
+    if (el) el.textContent = k === sortKol ? (sortDir === 'asc' ? '↑' : '↓') : '';
+  });
+  allRegninger.sort((a,b) => {
+    let va = a[sortKol], vb = b[sortKol];
+    if (typeof va === 'string') va = va.toLowerCase();
+    if (typeof vb === 'string') vb = vb.toLowerCase();
+    if (va < vb) return sortDir === 'asc' ? -1 : 1;
+    if (va > vb) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  renderOversikt();
+}
+
+function nullstillFilter() {
+  document.getElementById('fil_status').value = '';
+  document.getElementById('fil_idrett').value = '';
+  document.getElementById('fil_aar').value = '';
+  document.getElementById('fil_mnd').value = '';
+  loadOversikt();
+}
+
 async function loadOversikt() {
   const status = document.getElementById('fil_status')?.value;
   const aar    = document.getElementById('fil_aar')?.value;
   const mnd    = document.getElementById('fil_mnd')?.value;
 
+  const idrett = document.getElementById('fil_idrett')?.value;
   let q = sb.from('dommerregninger').select('*').order('opprettet', {ascending: false});
   if (status) q = q.eq('status', status);
+  if (idrett) q = q.eq('idrett', idrett);
   if (aar)    q = q.eq('aarstall', aar);
   if (mnd)    q = q.gte('kampdato', mnd+'-01').lt('kampdato', nextMonth(mnd));
 
@@ -1005,8 +1124,10 @@ window._doBulkOppdater = async function(ids, nyStatus) {
 
 async function oppdaterStatus(id, nyStatus) {
   const label = nyStatus === 'godkjent' ? 'Godkjenn' : 'Avvis';
-  const msg   = nyStatus === 'godkjent' ? 'Regningen godkjennes og går til eksport.' : 'Regningen avvises og vil ikke eksporteres.';
   const cls   = nyStatus === 'godkjent' ? 'btn-green' : 'btn-primary';
+  const msg   = nyStatus === 'godkjent'
+    ? 'Regningen godkjennes og går til eksport.'
+    : '⚠️ Husk at du må informere dommeren om at regningen er avvist. Ta kontakt direkte med dommeren.';
   openModal(label + ' regning', msg, [
     {label:'Avbryt', cls:'btn-outline', fn:'closeModal()'},
     {label:label, cls:cls, fn:`_doOppdater('${id}','${nyStatus}')`},
@@ -1117,7 +1238,7 @@ function renderEksportListe() {
   if (!visData.length) { el.innerHTML = '<div class="empty"><i class="ti ti-inbox"></i><p>Ingen godkjente regninger</p></div>'; return; }
   el.innerHTML = visData.map(r => `
     <div class="cb-row">
-      <input type="checkbox" id="ek_${r.id}" value="${r.id}" checked>
+      <input type="checkbox" id="ek_${r.id}" value="${r.id}" ${r.status==='godkjent'?'checked':''}>
       <label for="ek_${r.id}">
         <span class="dot ${r.status==='godkjent'?'dot-green':'dot-gray'}"></span>
         <strong>${esc(r.dommer_navn)}</strong> – ${fmtDato(r.kampdato)} –
