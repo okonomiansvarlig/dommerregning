@@ -1181,7 +1181,8 @@ window._doMarkerFlere = async function(ids) {
 
   // Logg hver eksport
   const loggRader = ids.map(id => ({regning_id: id, eksportert_dato: now, eksportert_av: av}));
-  await sb.from('dommerregninger_eksport_logg').insert(loggRader);
+  const { error: loggError } = await sb.from('dommerregninger_eksport_logg').insert(loggRader);
+  if (loggError) { console.error('Logg-feil:', loggError); showToast('Advarsel: eksport-logg feilet'); }
 
   showToast(`${ids.length} regning(er) markert eksportert`);
   await loadEksport();
@@ -1372,10 +1373,19 @@ async function doImport() {
 
 // ── HISTORIKK ────────────────────────────────────────────────────────────────
 let historikkData = [];
+let historikkLogg = {};
 async function loadHistorikk() {
-  const { data, error } = await sb.from('dommerregninger').select('*').order('kampdato', {ascending:false});
+  const [{ data, error }, { data: logg }] = await Promise.all([
+    sb.from('dommerregninger').select('*').order('kampdato', {ascending:false}),
+    sb.from('dommerregninger_eksport_logg').select('*').order('eksportert_dato', {ascending:false}),
+  ]);
   if (error) { console.error(error); return; }
   historikkData = data || [];
+  historikkLogg = {};
+  (logg || []).forEach(l => {
+    if (!historikkLogg[l.regning_id]) historikkLogg[l.regning_id] = [];
+    historikkLogg[l.regning_id].push(l);
+  });
   renderHistorikk();
 }
 
@@ -1424,7 +1434,13 @@ function renderHistorikk() {
           : r.status==='eksportert' ? `<span class="badge" style="background:var(--bg);color:var(--text4);border:1px solid var(--border)">Eksportert</span>`
           : `<span class="badge" style="background:var(--red-light);color:var(--red)">Avvist</span>`}
         </td>
-        <td style="font-size:11px;color:var(--text4)">${r.eksportert_dato ? fmtTs(r.eksportert_dato) + (r.eksportert_av ? '<br><span style=\"color:var(--text4)\">' + esc(r.eksportert_av) + '</span>' : '') : '–'}</td>
+        <td style="font-size:11px;color:var(--text4)">
+          ${historikkLogg[r.id] && historikkLogg[r.id].length > 0
+            ? historikkLogg[r.id].map((l,i) =>
+                `<span style="display:block">${historikkLogg[r.id].length > 1 ? (historikkLogg[r.id].length-i)+'. ' : ''}${fmtTs(l.eksportert_dato)}${l.eksportert_av ? '<br>'+esc(l.eksportert_av) : ''}</span>`
+              ).join('')
+            : r.eksportert_dato ? fmtTs(r.eksportert_dato) + (r.eksportert_av ? '<br>'+esc(r.eksportert_av) : '') : '–'}
+        </td>
         <td><button class="btn btn-sm btn-outline" style="padding:5px 8px" title="Slett innsending" onclick="slettFraHistorikk('${r.id}','${esc(d.navn)}')"><i class="ti ti-trash"></i></button></td>
       </tr>`).join('');
 
