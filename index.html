@@ -1134,7 +1134,7 @@ function renderEksportListe() {
             }
             if (!alleLinjer.length) return '';
             return `<div style="margin-top:4px">${alleLinjer.map((l,i) =>
-              `<span style="font-size:11px;color:var(--text4);display:block">⚠️${alleLinjer.length > 1 ? ' '+(alleLinjer.length-i)+'. gang:' : ''} ${fmtTs(l.eksportert_dato)}${l.eksportert_av ? ' av '+esc(l.eksportert_av) : ''}</span>`
+              `<span style="font-size:11px;color:var(--text4);display:block">⚠️ Eksportert${alleLinjer.length > 1 ? ' ('+(alleLinjer.length-i)+'. gang)' : ''}: ${fmtTs(l.eksportert_dato)}${l.eksportert_av ? ' av '+esc(l.eksportert_av) : ''}</span>`
             ).join('')}</div>`;
           })()}
       </label>
@@ -1460,7 +1460,7 @@ function renderHistorikk() {
             }
             if (!alleLinjer.length) return '–';
             return alleLinjer.map((l,i) =>
-              `<span style="display:block">${alleLinjer.length > 1 ? (alleLinjer.length-i)+'. ' : ''}${fmtTs(l.eksportert_dato)}${l.eksportert_av ? '<br>'+esc(l.eksportert_av) : ''}</span>`
+              `<span style="display:block">Eksportert${alleLinjer.length > 1 ? ' ('+(alleLinjer.length-i)+'. gang)' : ''}: ${fmtTs(l.eksportert_dato)}${l.eksportert_av ? '<br>'+esc(l.eksportert_av) : ''}</span>`
             ).join('');
           })()}</td>
         <td><button class="btn btn-sm btn-outline" style="padding:5px 8px" title="Slett innsending" onclick="slettFraHistorikk('${r.id}','${esc(d.navn)}')"><i class="ti ti-trash"></i></button></td>
