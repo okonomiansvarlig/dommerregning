@@ -844,7 +844,7 @@ async function sjekkStatus() {
   if (!epost || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(epost)) {
     err.textContent = 'Skriv inn en gyldig e-postadresse.'; err.style.display = 'block'; return;
   }
-  const { data, error } = await sb.from('dommerregninger')
+  const { data, error } = await sb.from('dommerregninger_public')
     .select('dommer_navn,kampdato,hjemmelag,bortelag,aarstall,honorar,status,opprettet')
     .ilike('dommer_epost', epost)
     .order('kampdato', {ascending: false});
