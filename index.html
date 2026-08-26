@@ -191,9 +191,8 @@ tbody td strong{color:var(--text);font-weight:600}
 }
 
 /* Eksportert row */
-tr.rad-eksportert td { color: var(--text4) !important; }
-tr.rad-eksportert strong { color: var(--text4) !important; font-weight:500 !important; }
-tr.rad-eksportert { background: #fafafa; }
+tr.rad-eksportert { background: #fafafa; opacity: 0.72; }
+tr.rad-eksportert:hover { opacity: 1; }
 
 /* Historikk */
 .hist-card{background:var(--card);border:1px solid var(--border);border-radius:14px;margin-bottom:.75rem;overflow:hidden}
@@ -1065,7 +1064,10 @@ function renderOversikt() {
       <td style="font-size:12px">${esc(r.hjemmelag)} – ${esc(r.bortelag)}</td>
       <td>${esc(r.aarstall)}</td>
       <td style="font-weight:600;color:var(--blue)">${kr(r.honorar)}</td>
-      <td style="font-size:11px;color:var(--text4)">${fmtTs(r.opprettet)}</td>
+      <td style="font-size:11px;color:var(--text4)">
+        ${fmtTs(r.opprettet)}
+        ${r.eksportert_dato ? `<br><span style="color:var(--text4)">Eks: ${fmtTs(r.eksportert_dato)}</span>` : ''}
+      </td>
       <td>
         <div style="display:flex;gap:5px;align-items:center">
           ${r.status==='ny'
