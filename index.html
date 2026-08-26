@@ -378,6 +378,9 @@ tbody td strong{color:var(--text);font-weight:600}
         <button class="nav-item" id="nav_historikk" onclick="navTo('historikk')">
           <i class="ti ti-history"></i>Historikk
         </button>
+        <button class="nav-item" id="nav_import" onclick="navTo('import')">
+          <i class="ti ti-file-upload"></i>Importer
+        </button>
         <div style="margin:.5rem 1rem;border-top:1px solid var(--border)"></div>
         <button class="nav-item" onclick="showPublicForm()">
           <i class="ti ti-external-link"></i>Dommerskjema
@@ -538,6 +541,46 @@ tbody td strong{color:var(--text);font-weight:600}
         </div>
       </div>
 
+      <!-- IMPORT -->
+      <div id="page_import" class="page">
+        <div class="page-title">Importer fra Excel</div>
+        <div class="card" style="margin-bottom:.75rem">
+          <div style="font-size:14px;font-weight:600;margin-bottom:.5rem">Last opp Excel-fil</div>
+          <div style="font-size:13px;color:var(--text3);margin-bottom:.5rem">Støtter samme format som det gamle Google Forms-eksportarket.</div>
+          <div style="font-size:13px;color:var(--text3);margin-bottom:1rem">Velg hvilken rad importen skal starte fra (standard: 2 for vanlig Excel med én headerrad).</div>
+          <div style="display:flex;gap:10px;align-items:center;margin-bottom:1rem;flex-wrap:wrap">
+            <div class="form-row" style="margin-bottom:0;flex:1;min-width:180px">
+              <label>Start fra rad</label>
+              <input type="number" id="importStartRad" value="2" min="1" style="padding:8px 10px;border:1px solid var(--border);border-radius:9px;font-size:14px;width:100px"/>
+            </div>
+          </div>
+          <input type="file" id="importFile" accept=".xlsx" onchange="handleImportFile(event)"
+            style="font-size:13px;padding:8px;border:1px dashed var(--border);border-radius:9px;width:100%;cursor:pointer;background:var(--bg)"/>
+        </div>
+        <div id="importPreview" style="display:none">
+          <div class="card" style="margin-bottom:.75rem">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:.875rem">
+              <div>
+                <div style="font-size:14px;font-weight:600" id="importCount"></div>
+                <div style="font-size:12px;color:var(--text3)">Sjekk radene under før du importerer</div>
+              </div>
+              <button class="btn btn-primary" onclick="doImport()"><i class="ti ti-database-import"></i>Importer alle</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th><th>Dommer</th><th>Kampdato</th><th>Idrett</th><th>Årsklasse</th><th>Hjemme – Borte</th><th>Honorar</th><th>Kontonr</th><th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="importTbl"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div id="importResult" style="display:none"></div>
+      </div>
+
       <!-- SATSER -->
       <div id="page_satser" class="page">
         <div class="page-title">Dommerhonorar – satser</div>
@@ -565,6 +608,9 @@ tbody td strong{color:var(--text);font-weight:600}
       </button>
       <button class="mobile-nav-btn" id="mnav_historikk" onclick="navTo('historikk')">
         <i class="ti ti-history"></i><span>Historikk</span>
+      </button>
+      <button class="mobile-nav-btn" id="mnav_import" onclick="navTo('import')">
+        <i class="ti ti-file-upload"></i><span>Importer</span>
       </button>
       <button class="mobile-nav-btn" onclick="showPublicForm()">
         <i class="ti ti-external-link"></i><span>Skjema</span>
@@ -597,9 +643,9 @@ const DEFAULT_SATSER = {
     {aarstall:'G/J 2019 (5er)', sats:150},
     {aarstall:'G/J 2018 (5er)', sats:150},
     {aarstall:'G/J 2017 (5er)', sats:150},
-    {aarstall:'G/J 2016 (5er)', sats:150},
+    {aarstall:'G/J 2016 (7er)', sats:200},
     {aarstall:'G/J 2015 (7er)', sats:200},
-    {aarstall:'G/J 2014 (7er)', sats:200},
+    {aarstall:'G/J 2014 (9er)', sats:400},
     {aarstall:'G/J 2013 (9er)', sats:400},
     {aarstall:'11er',           sats:500},
     {aarstall:'Senior 7er',     sats:450},
@@ -914,7 +960,7 @@ async function showAdminApp() {
 }
 
 function navTo(page) {
-  ['oversikt','eksport','satser','historikk'].forEach(p => {
+  ['oversikt','eksport','satser','historikk','import'].forEach(p => {
     document.getElementById('page_'+p).classList.toggle('active', p===page);
     const si = document.getElementById('nav_'+p);
     const mi = document.getElementById('mnav_'+p);
@@ -1372,9 +1418,9 @@ function handleImportFile(event) {
     const ws = wb.Sheets[wb.SheetNames[0]];
     const allRows = XLSX.utils.sheet_to_json(ws, {header:1, defval:'', raw:false, dateNF:'yyyy-mm-dd'});
 
-    // From row 1140 (index 1139)
+    const startRad = parseInt(document.getElementById('importStartRad')?.value || '2');
     importRows = [];
-    for (let i = 1139; i < allRows.length; i++) {
+    for (let i = startRad - 1; i < allRows.length; i++) {
       const r = allRows[i];
       if (!r || r.length < 11) continue;
 
