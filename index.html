@@ -268,7 +268,6 @@ tbody td strong{color:var(--text);font-weight:600}
           <option value="">Velg idrett…</option>
           <option value="Fotball">Fotball</option>
           <option value="Håndball">Håndball</option>
-          <option value="Bandy">Bandy</option>
         </select>
       </div>
       <div class="form-row">
@@ -485,47 +484,6 @@ tbody td strong{color:var(--text);font-weight:600}
 
       <!-- IMPORT -->
       <div id="page_import" class="page">
-        <div class="page-title">Importer fra Excel</div>
-        <div class="card" style="margin-bottom:.75rem">
-          <div style="font-size:14px;font-weight:600;margin-bottom:.5rem">Last opp Excel-fil</div>
-          <div style="font-size:13px;color:var(--text3);margin-bottom:1rem">
-            Støtter samme format som det gamle Google Forms-eksportarket. Importerer fra rad 1140.
-          </div>
-          <input type="file" id="importFile" accept=".xlsx" onchange="handleImportFile(event)"
-            style="font-size:13px;padding:8px;border:1px dashed var(--border);border-radius:9px;width:100%;cursor:pointer;background:var(--bg)"/>
-        </div>
-        <div id="importPreview" style="display:none">
-          <div class="card" style="margin-bottom:.75rem">
-            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:.875rem">
-              <div>
-                <div style="font-size:14px;font-weight:600" id="importCount"></div>
-                <div style="font-size:12px;color:var(--text3)">Sjekk radene under før du importerer</div>
-              </div>
-              <button class="btn btn-primary" onclick="doImport()"><i class="ti ti-database-import"></i>Importer alle</button>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Dommer</th>
-                    <th>Kampdato</th>
-                    <th>Idrett</th>
-                    <th>Årsklasse</th>
-                    <th>Hjemme – Borte</th>
-                    <th>Honorar</th>
-                    <th>Kontonr</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody id="importTbl"></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-        <div id="importResult" style="display:none"></div>
-      </div>
-
       <!-- HISTORIKK -->
       <div id="page_historikk" class="page">
         <div class="page-title">Dommerhistorikk</div>
@@ -546,7 +504,7 @@ tbody td strong{color:var(--text);font-weight:600}
         <div class="page-title">Importer fra Excel</div>
         <div class="card" style="margin-bottom:.75rem">
           <div style="font-size:14px;font-weight:600;margin-bottom:.5rem">Last opp Excel-fil</div>
-          <div style="font-size:13px;color:var(--text3);margin-bottom:.5rem">Støtter samme format som det gamle Google Forms-eksportarket.</div>
+          <div style="font-size:13px;color:var(--text3);margin-bottom:.5rem">Last opp en Excel-fil med dommerregninger.</div>
           <div style="font-size:13px;color:var(--text3);margin-bottom:1rem">Velg hvilken rad importen skal starte fra (standard: 2 for vanlig Excel med én headerrad).</div>
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:1rem;flex-wrap:wrap">
             <div class="form-row" style="margin-bottom:0;flex:1;min-width:180px">
@@ -857,7 +815,7 @@ async function submitForm() {
   btn.disabled = false; btn.textContent = 'Send inn regning';
 
   if (error) {
-    err.textContent = 'Feil: ' + (error.message || JSON.stringify(error));
+    err.textContent = 'Noe gikk galt ved innsending. Sjekk at alle felt er fylt ut riktig og prøv igjen.';
     err.style.display = 'block';
     console.error(error); return;
   }
@@ -891,7 +849,13 @@ async function sjekkStatus() {
     .ilike('dommer_epost', epost)
     .order('kampdato', {ascending: false});
 
-  if (error || !data) { err.textContent = 'Noe gikk galt. Prøv igjen.'; err.style.display = 'block'; return; }
+  if (error) {
+    err.textContent = 'Kunne ikke hente regninger. Kontakt klubben for status.';
+    err.style.display = 'block';
+    console.error('sjekkStatus error:', error);
+    return;
+  }
+  if (!data) { err.textContent = 'Noe gikk galt. Prøv igjen.'; err.style.display = 'block'; return; }
 
   const res = document.getElementById('sjekk_resultat');
   res.style.display = 'block';
@@ -956,12 +920,11 @@ async function doLogout() {
 async function showAdminApp() {
   document.getElementById('sjekkStatusWrap').style.display = 'none';
   document.getElementById('publicForm').style.display = 'none';
+  document.getElementById('successScreen').style.display = 'none';
   document.getElementById('loginWrap').style.display = 'none';
   document.getElementById('adminApp').style.display = 'flex';
   document.getElementById('sidebar_user').textContent = currentUser?.email || '';
   await loadOversikt();
-  renderSatser();
-  await loadEksport();
 }
 
 function navTo(page) {
@@ -1009,12 +972,14 @@ function nullstillFilter() {
 }
 
 async function loadOversikt() {
+  const tbody = document.getElementById('tbl_regninger');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:2rem;color:var(--text4)"><i class="ti ti-loader" style="font-size:20px"></i> Laster…</td></tr>';
   const status = document.getElementById('fil_status')?.value;
   const aar    = document.getElementById('fil_aar')?.value;
   const mnd    = document.getElementById('fil_mnd')?.value;
 
   const idrett = document.getElementById('fil_idrett')?.value;
-  let q = sb.from('dommerregninger').select('*').order('opprettet', {ascending: false});
+  let q = sb.from('dommerregninger').select('*').order('opprettet', {ascending: false}).limit(500);
   if (status) q = q.eq('status', status);
   if (idrett) q = q.eq('idrett', idrett);
   if (aar)    q = q.eq('aarstall', aar);
@@ -1023,6 +988,17 @@ async function loadOversikt() {
   const { data, error } = await q;
   if (error) { console.error(error); return; }
   allRegninger = data || [];
+  // Re-apply current sort
+  if (sortKol) {
+    allRegninger.sort((a,b) => {
+      let va = a[sortKol], vb = b[sortKol];
+      if (typeof va === 'string') va = va.toLowerCase();
+      if (typeof vb === 'string') vb = vb.toLowerCase();
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
   renderOversikt();
   renderStats();
 }
@@ -1039,7 +1015,7 @@ function renderStats() {
   const sumNy   = allRegninger.filter(r => r.status === 'ny').reduce((a,r)=>a+Number(r.honorar||0),0);
   const sumGodkjent = allRegninger.filter(r => r.status === 'godkjent').reduce((a,r)=>a+Number(r.honorar||0),0);
   const sumAll  = allRegninger.reduce((a,r)=>a+Number(r.honorar||0),0);
-  const dupCount = allRegninger.filter(r => isDuplikat(r, allRegninger)).length;
+  const dupCount = duplikatPar(allRegninger);
   document.getElementById('statsRow').innerHTML = `
     <div class="stat-card">
       <div class="stat-label">Nye regninger</div>
@@ -1067,15 +1043,28 @@ function renderStats() {
     </div>` : ''}`;
 }
 
+function dupKey(r) {
+  return [
+    (r.dommer_epost||'').toLowerCase().trim(),
+    (r.kampdato||'').slice(0,10),
+    (r.hjemmelag||'').toLowerCase().trim(),
+    (r.bortelag||'').toLowerCase().trim(),
+    (r.aarstall||'').trim(),
+  ].join('|');
+}
+
 function isDuplikat(r, alle) {
-  return alle.filter(x =>
-    x.id !== r.id &&
-    x.dommer_epost.toLowerCase() === r.dommer_epost.toLowerCase() &&
-    x.kampdato === r.kampdato &&
-    x.hjemmelag.toLowerCase() === r.hjemmelag.toLowerCase() &&
-    x.bortelag.toLowerCase() === r.bortelag.toLowerCase() &&
-    x.aarstall === r.aarstall
-  ).length > 0;
+  const key = dupKey(r);
+  return alle.some(x => x.id !== r.id && dupKey(x) === key);
+}
+
+function duplikatPar(alle) {
+  // Returns count of unique duplicate keys (pairs), not individual rows
+  const keys = alle.map(dupKey);
+  const seen = new Set();
+  const dups = new Set();
+  keys.forEach(k => { if (seen.has(k)) dups.add(k); else seen.add(k); });
+  return dups.size;
 }
 
 function renderOversikt() {
@@ -1088,7 +1077,6 @@ function renderOversikt() {
   empty.style.display = 'none';
   tbody.innerHTML = allRegninger.map(r => {
     const dup = isDuplikat(r, allRegninger);
-    const kanVelges = r.status === 'ny';
     return `
     <tr style="${dup ? 'background:var(--yellow-light)' : ''}">
       <td style="width:32px">
@@ -1268,6 +1256,8 @@ window._doSlettHistorikk = async function(id) {
 let eksportData = [];
 let eksportLogg = {};
 async function loadEksport() {
+  const el = document.getElementById('eksportListe');
+  if (el) el.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text4)"><i class="ti ti-loader" style="font-size:20px"></i> Laster…</div>';
   const [{ data, error }, { data: logg }] = await Promise.all([
     sb.from('dommerregninger').select('*').order('kampdato', {ascending: false}),
     sb.from('dommerregninger_eksport_logg').select('*').order('eksportert_dato', {ascending: false}),
@@ -1564,8 +1554,8 @@ let historikkData = [];
 let historikkLogg = {};
 async function loadHistorikk() {
   const [{ data, error }, { data: logg }] = await Promise.all([
-    sb.from('dommerregninger').select('*').order('kampdato', {ascending:false}),
-    sb.from('dommerregninger_eksport_logg').select('*').order('eksportert_dato', {ascending:false}),
+    sb.from('dommerregninger').select('*').order('kampdato', {ascending:false}).limit(1000),
+    sb.from('dommerregninger_eksport_logg').select('*').order('eksportert_dato', {ascending:false}).limit(2000),
   ]);
   if (error) { console.error(error); return; }
   historikkData = data || [];
