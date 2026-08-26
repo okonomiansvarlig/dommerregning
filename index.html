@@ -224,9 +224,15 @@ tbody td strong{color:var(--text);font-weight:600}
   <div class="form-card">
     <!-- Dommerinfo -->
     <div class="form-section-label">Om deg</div>
-    <div class="form-row">
-      <label>Ditt navn<span class="req">*</span></label>
-      <input type="text" id="f_navn" placeholder="Fornavn Etternavn" autocomplete="name" required/>
+    <div class="form-2col">
+      <div class="form-row">
+        <label>Fornavn<span class="req">*</span></label>
+        <input type="text" id="f_fornavn" placeholder="Fornavn" autocomplete="given-name" required/>
+      </div>
+      <div class="form-row">
+        <label>Etternavn<span class="req">*</span></label>
+        <input type="text" id="f_etternavn" placeholder="Etternavn" autocomplete="family-name" required/>
+      </div>
     </div>
     <div class="form-2col">
       <div class="form-row">
@@ -747,7 +753,7 @@ function showPublicForm() {
 }
 
 function resetForm() {
-  ['f_navn','f_epost','f_tlf','f_konto','f_hjemme','f_borte'].forEach(id => {
+  ['f_fornavn','f_etternavn','f_epost','f_tlf','f_konto','f_hjemme','f_borte'].forEach(id => {
     document.getElementById(id).value = '';
   });
   document.getElementById('f_idrett').value = '';
@@ -769,17 +775,19 @@ async function submitForm() {
   err.style.display = 'none';
   const btn = document.getElementById('f_submit');
 
-  const navn    = document.getElementById('f_navn').value.trim();
-  const epost   = document.getElementById('f_epost').value.trim();
-  const tlf     = document.getElementById('f_tlf').value.trim();
-  const konto   = document.getElementById('f_konto').value.trim();
-  const dato    = document.getElementById('f_dato').value;
-  const hjemme  = document.getElementById('f_hjemme').value.trim();
-  const borte   = document.getElementById('f_borte').value.trim();
-  const idrett  = document.getElementById('f_idrett').value;
-  const aarskl  = document.getElementById('f_aarstall').value;
+  const fornavn  = document.getElementById('f_fornavn').value.trim();
+  const etternavn= document.getElementById('f_etternavn').value.trim();
+  const navn     = `${fornavn} ${etternavn}`;
+  const epost    = document.getElementById('f_epost').value.trim();
+  const tlf      = document.getElementById('f_tlf').value.trim();
+  const konto    = document.getElementById('f_konto').value.trim();
+  const dato     = document.getElementById('f_dato').value;
+  const hjemme   = document.getElementById('f_hjemme').value.trim();
+  const borte    = document.getElementById('f_borte').value.trim();
+  const idrett   = document.getElementById('f_idrett').value;
+  const aarskl   = document.getElementById('f_aarstall').value;
 
-  if (!navn || !epost || !tlf || !konto || !dato || !hjemme || !borte || !idrett || !aarskl) {
+  if (!fornavn || !etternavn || !epost || !tlf || !konto || !dato || !hjemme || !borte || !idrett || !aarskl) {
     err.textContent = 'Fyll ut alle feltene.'; err.style.display = 'block'; return;
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(epost)) {
@@ -799,6 +807,8 @@ async function submitForm() {
   btn.disabled = true; btn.textContent = 'Sender…';
 
   const { error } = await sb.from('dommerregninger').insert({
+    dommer_fornavn: fornavn,
+    dommer_etternavn: etternavn,
     dommer_navn: navn,
     dommer_epost: epost,
     dommer_tlf: tlf,
@@ -1087,7 +1097,7 @@ function renderOversikt() {
         ${dup ? '<span title="Mulig duplikat" style="font-size:14px;cursor:default">⚠️</span>' : ''}
       </td>
       <td>
-        <strong>${esc(r.dommer_navn)}</strong><br>
+        <strong>${esc(r.dommer_etternavn || '')} ${esc(r.dommer_fornavn || r.dommer_navn || '')}</strong><br>
         <span style="font-size:11px;color:var(--text4)">${esc(r.dommer_epost)}</span>
       </td>
       <td>${fmtDato(r.kampdato)}</td>
@@ -1309,9 +1319,19 @@ async function downloadExcel(kunNye) {
     : eksportData.filter(r => r.status === 'godkjent' || r.status === 'eksportert');
   if (!rows.length) { showToast('Ingen rader å eksportere'); return; }
   const avdMap = {'Fotball':'4','Håndball':'6'};
+  // Sort alphabetically by etternavn, then fornavn
+  rows.sort((a,b) => {
+    const enA = (a.dommer_etternavn || a.dommer_navn.split(' ').slice(-1)[0] || '').toLowerCase();
+    const enB = (b.dommer_etternavn || b.dommer_navn.split(' ').slice(-1)[0] || '').toLowerCase();
+    if (enA < enB) return -1; if (enA > enB) return 1;
+    const fnA = (a.dommer_fornavn || a.dommer_navn.split(' ')[0] || '').toLowerCase();
+    const fnB = (b.dommer_fornavn || b.dommer_navn.split(' ')[0] || '').toLowerCase();
+    return fnA < fnB ? -1 : fnA > fnB ? 1 : 0;
+  });
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet(rows.map(r => ({
-    'Navn':         r.dommer_navn,
+    'Fornavn':      r.dommer_fornavn || r.dommer_navn.split(' ')[0] || '',
+    'Etternavn':    r.dommer_etternavn || r.dommer_navn.split(' ').slice(1).join(' ') || '',
     'Sum':          r.honorar,
     'Avdeling':     avdMap[r.idrett] || r.idrett || '',
     'Kontonummer':  r.kontonr,
