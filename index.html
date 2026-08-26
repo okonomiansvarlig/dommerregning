@@ -472,7 +472,7 @@ tr.rad-eksportert:hover { opacity: 1; }
             <div>
               <div style="font-size:14px;font-weight:600;margin-bottom:3px">Last ned Excel</div>
               <div style="font-size:13px;color:var(--text3)">
-                <span class="dot dot-green"></span>Grønn = klar for eksport &nbsp;
+                <span class="dot dot-blue"></span>Blå = klar for eksport &nbsp;
                 <span class="dot dot-gray"></span>Grå = tidligere eksportert
               </div>
             </div>
@@ -1270,17 +1270,24 @@ function renderEksportListe() {
   const el = document.getElementById('eksportListe');
   const visData = eksportData.filter(r => r.status === 'godkjent' || r.status === 'eksportert');
   if (!visData.length) { el.innerHTML = '<div class="empty"><i class="ti ti-inbox"></i><p>Ingen godkjente regninger</p></div>'; return; }
-  el.innerHTML = visData.map(r => `
-    <div class="cb-row">
-      <input type="checkbox" id="ek_${r.id}" value="${r.id}" ${r.status==='godkjent'?'checked':''}>
-      <label for="ek_${r.id}">
-        <span class="dot ${r.status==='godkjent'?'dot-green':'dot-gray'}"></span>
-        <strong>${esc(r.dommer_navn)}</strong> – ${fmtDato(r.kampdato)} –
-        ${esc(r.hjemmelag)} vs ${esc(r.bortelag)} (${esc(r.aarstall)}) –
-        <span style="color:var(--blue);font-weight:600">${kr(r.honorar)}</span>
+  el.innerHTML = visData.map(r => {
+    const erKlar = r.status === 'godkjent';
+    const bg = erKlar
+      ? 'background:#eff8ff;border:1px solid #bae0ff;border-radius:8px;padding:6px 10px;margin-bottom:4px'
+      : 'background:#f7f7f5;border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin-bottom:4px;opacity:0.7';
+    return `
+    <div style="${bg}">
+      <div class="cb-row" style="padding:0">
+      <input type="checkbox" id="ek_${r.id}" value="${r.id}" ${erKlar?'checked':''}>
+      <label for="ek_${r.id}" style="display:flex;flex-direction:column;gap:2px;flex:1">
+        <div>
+          <span class="dot ${erKlar?'dot-blue':'dot-gray'}"></span>
+          <strong>${esc(r.dommer_navn)}</strong> – ${fmtDato(r.kampdato)} –
+          ${esc(r.hjemmelag)} vs ${esc(r.bortelag)} (${esc(r.aarstall)}) –
+          <span style="color:var(--blue);font-weight:600">${kr(r.honorar)}</span>
+        </div>
         ${(() => {
             const logg = eksportLogg[r.id] || [];
-            // Check if the old eksportert_dato is already covered by a logg entry (within 1 min)
             const gammelDekket = !r.eksportert_dato || logg.some(l => Math.abs(new Date(l.eksportert_dato) - new Date(r.eksportert_dato)) < 60000);
             const alleLinjer = [...logg];
             if (r.eksportert_dato && !gammelDekket) {
@@ -1288,12 +1295,14 @@ function renderEksportListe() {
               alleLinjer.sort((a,b) => new Date(b.eksportert_dato) - new Date(a.eksportert_dato));
             }
             if (!alleLinjer.length) return '';
-            return `<div style="margin-top:4px">${alleLinjer.map((l,i) =>
+            return `<div>${alleLinjer.map((l,i) =>
               `<span style="font-size:11px;color:var(--text4);display:block">⚠️ Eksportert${alleLinjer.length > 1 ? ' ('+(alleLinjer.length-i)+'. gang)' : ''}: ${fmtTs(l.eksportert_dato)}${l.eksportert_av ? ' av '+esc(l.eksportert_av) : ''}</span>`
             ).join('')}</div>`;
           })()}
       </label>
-    </div>`).join('');
+      </div>
+    </div>`;
+  }).join('');
 }
 
 async function downloadExcel(kunNye) {
