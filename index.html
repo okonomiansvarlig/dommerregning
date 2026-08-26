@@ -125,10 +125,11 @@ tbody tr:hover{background:var(--bg)}
 tbody td{padding:11px 12px;vertical-align:middle;color:var(--text2)}
 tbody td strong{color:var(--text);font-weight:600}
 .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;flex-shrink:0}
-.dot-blue{background:var(--blue)}
+.dot-blue{background:#0ea5e9}
 .dot-gray{background:var(--text4)}
 .dot-green{background:var(--green)}
 .dot-red{background:var(--red)}
+.dot-orange{background:#f97316}
 
 /* Action btns */
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:opacity .15s}
@@ -188,6 +189,11 @@ tbody td strong{color:var(--text);font-weight:600}
 @media(min-width:701px){
   .mobile-topbar,.mobile-nav{display:none!important}
 }
+
+/* Eksportert row */
+tr.rad-eksportert td { color: var(--text4) !important; }
+tr.rad-eksportert strong { color: var(--text4) !important; font-weight:500 !important; }
+tr.rad-eksportert { background: #fafafa; }
 
 /* Historikk */
 .hist-card{background:var(--card);border:1px solid var(--border);border-radius:14px;margin-bottom:.75rem;overflow:hidden}
@@ -1042,12 +1048,12 @@ function renderOversikt() {
   tbody.innerHTML = allRegninger.map(r => {
     const dup = isDuplikat(r, allRegninger);
     return `
-    <tr style="${dup ? 'background:var(--yellow-light)' : ''}">
+    <tr class="${r.status==='eksportert' ? 'rad-eksportert' : ''}" style="${dup ? 'background:var(--yellow-light)' : ''}">
       <td style="width:32px">
         <input type="checkbox" class="rad-cb" value="${r.id}" data-status="${r.status}" onchange="oppdaterBulkBar()" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer"/>
       </td>
       <td>
-        <span class="dot ${r.status==='ny'?'dot-blue':r.status==='godkjent'?'dot-green':r.status==='eksportert'?'dot-gray':'dot-red'}"></span>
+        <span class="dot ${r.status==='ny'?'dot-orange':r.status==='godkjent'?'dot-blue':r.status==='eksportert'?'dot-gray':'dot-red'}"></span>
         ${dup ? '<span title="Mulig duplikat" style="font-size:14px;cursor:default">⚠️</span>' : ''}
       </td>
       <td>
