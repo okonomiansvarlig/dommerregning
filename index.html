@@ -1066,10 +1066,10 @@ function renderOversikt() {
             ? `<button class="btn btn-green btn-sm" onclick="oppdaterStatus('${r.id}','godkjent')">Godkjenn</button>
                <button class="btn btn-sm" style="background:var(--red-light);color:var(--red);border:1px solid var(--red-border)" onclick="oppdaterStatus('${r.id}','avvist')">Avvis</button>`
             : r.status==='godkjent'
-            ? `<span class="badge badge-paid">Godkjent</span>`
+            ? `<span class="badge badge-paid">Godkjent</span>${r.behandlet_av ? `<span style="font-size:11px;font-weight:700;color:var(--green);margin-left:4px">${initialFraEpost(r.behandlet_av)}</span>` : ''}`
             : r.status==='eksportert'
-            ? `<span class="badge" style="background:var(--bg);color:var(--text4);border:1px solid var(--border)">Eksportert</span>`
-            : `<span class="badge" style="background:var(--red-light);color:var(--red)">Avvist</span>`}
+            ? `<span class="badge" style="background:var(--bg);color:var(--text4);border:1px solid var(--border)">Eksportert</span>${r.behandlet_av ? `<span style="font-size:11px;font-weight:700;color:var(--text4);margin-left:4px">${initialFraEpost(r.behandlet_av)}</span>` : ''}`
+            : `<span class="badge" style="background:var(--red-light);color:var(--red)">Avvist</span>${r.behandlet_av ? `<span style="font-size:11px;font-weight:700;color:var(--red);margin-left:4px">${initialFraEpost(r.behandlet_av)}</span>` : ''}`}
           <button class="btn btn-sm btn-outline" style="padding:5px 8px" title="Slett innsending" onclick="slettInnsending('${r.id}','${esc(r.dommer_navn)}')"><i class="ti ti-trash"></i></button>
         </div>
       </td>
@@ -1117,7 +1117,7 @@ async function bulkOppdater(nyStatus) {
 
 window._doBulkOppdater = async function(ids, nyStatus) {
   closeModal();
-  const { error } = await sb.from('dommerregninger').update({status: nyStatus}).in('id', ids);
+  const { error } = await sb.from('dommerregninger').update({status: nyStatus, behandlet_av: currentUser?.email || ''}).in('id', ids);
   if (error) { showToast('Feil – prøv igjen'); return; }
   showToast(nyStatus === 'godkjent'
     ? ids.length + ' regninger godkjent'
@@ -1138,7 +1138,7 @@ async function oppdaterStatus(id, nyStatus) {
 }
 window._doOppdater = async function(id, nyStatus) {
   closeModal();
-  const { error } = await sb.from('dommerregninger').update({status: nyStatus}).eq('id', id);
+  const { error } = await sb.from('dommerregninger').update({status: nyStatus, behandlet_av: currentUser?.email || ''}).eq('id', id);
   if (error) { showToast('Feil – prøv igjen'); return; }
   showToast(nyStatus === 'godkjent' ? 'Regning godkjent' : 'Regning avvist');
   await loadOversikt();
@@ -1502,6 +1502,16 @@ function renderHistorikk() {
   }).join('');
 }
 
+
+function initialFraEpost(epost) {
+  const map = {
+    'warsame@sageneif.com': 'W',
+    'fedebasso006@gmail.com': 'F',
+    'okonomiansvarlig@sageneif.com': 'Ø',
+  };
+  if (!epost) return '?';
+  return map[epost.toLowerCase()] || epost.slice(0,1).toUpperCase();
+}
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 function kr(v) { return (Number(v)||0).toLocaleString('nb-NO')+' kr'; }
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
