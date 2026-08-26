@@ -598,6 +598,7 @@ const DEFAULT_SATSER = {
 
 let satser = { ...DEFAULT_SATSER };
 let allRegninger = [];
+let oversiktLogg = {};
 let currentUser = null;
 
 // ── INIT ───────────────────────────────────────────────────────────────────
@@ -954,9 +955,17 @@ async function loadOversikt() {
   if (aar)    q = q.eq('aarstall', aar);
   if (mnd)    q = q.gte('kampdato', mnd+'-01').lt('kampdato', nextMonth(mnd));
 
-  const { data, error } = await q;
+  const [{ data, error }, { data: loggData }] = await Promise.all([
+    q,
+    sb.from('dommerregninger_eksport_logg').select('*').order('eksportert_dato', {ascending: false}).limit(2000),
+  ]);
   if (error) { console.error(error); return; }
   allRegninger = data || [];
+  oversiktLogg = {};
+  (loggData || []).forEach(l => {
+    if (!oversiktLogg[l.regning_id]) oversiktLogg[l.regning_id] = [];
+    oversiktLogg[l.regning_id].push(l);
+  });
   // Re-apply current sort
   if (sortKol) {
     allRegninger.sort((a,b) => {
@@ -1066,7 +1075,19 @@ function renderOversikt() {
       <td style="font-weight:600;color:var(--blue)">${kr(r.honorar)}</td>
       <td style="font-size:11px;color:var(--text4)">
         ${fmtTs(r.opprettet)}
-        ${r.eksportert_dato ? `<br><span style="color:var(--text4)">Eks: ${fmtTs(r.eksportert_dato)}</span>` : ''}
+        ${(() => {
+          const logg = oversiktLogg[r.id] || [];
+          const gammelDekket = !r.eksportert_dato || logg.some(l => Math.abs(new Date(l.eksportert_dato) - new Date(r.eksportert_dato)) < 60000);
+          const alle = [...logg];
+          if (r.eksportert_dato && !gammelDekket) {
+            alle.push({eksportert_dato: r.eksportert_dato, eksportert_av: r.eksportert_av});
+            alle.sort((a,b) => new Date(b.eksportert_dato) - new Date(a.eksportert_dato));
+          }
+          if (!alle.length) return '';
+          return alle.map((l,i) =>
+            `<br><span style="color:var(--text4)">Eks${alle.length>1?' '+(alle.length-i)+'.':''}: ${fmtTs(l.eksportert_dato)}${l.eksportert_av ? ' ('+initialFraEpost(l.eksportert_av)+')' : ''}</span>`
+          ).join('');
+        })()}
       </td>
       <td>
         <div style="display:flex;gap:5px;align-items:center">
